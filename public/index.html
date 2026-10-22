@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Guest Book — FOH Recognition System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#221c17;
+    --ink-soft:#6b6459;
+    --paper:#faf7f2;
+    --panel:#ffffff;
+    --line:#e7e0d5;
+    --brand:#1f3b32;
+    --brand-light:#2c5346;
+    --gold:#9c6b2b;
+    --gold-soft:#f2e6d3;
+    --rust:#a6491f;
+    --rust-soft:#f7e4da;
+    --sage:#3f6b52;
+    --sage-soft:#e3ecE5;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
+  .app{display:flex;min-height:640px;max-width:1180px;margin:0 auto;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--panel);}
+  .rail{width:210px;flex-shrink:0;background:var(--brand);color:#f4efe6;display:flex;flex-direction:column;padding:24px 16px;}
+  .rail-brand{font-family:'Fraunces',serif;font-size:20px;font-weight:600;letter-spacing:.2px;margin:0 0 2px 6px;}
+  .rail-sub{font-size:12px;color:#c7d3cb;margin:0 0 28px 6px;}
+  .rail-btn{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:8px;background:transparent;border:none;color:#e8e2d6;font-family:'Inter',sans-serif;font-size:14px;font-weight:500;text-align:left;cursor:pointer;margin-bottom:4px;}
+  .rail-btn:hover{background:var(--brand-light);}
+  .rail-btn.active{background:var(--brand-light);color:#fff;}
+  .rail-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--rust);flex-shrink:0;}
+  .rail-spacer{flex:1;}
+  .rail-foot{font-size:11px;color:#a9b7ae;padding:0 6px;line-height:1.5;}
+  .main{flex:1;padding:28px 32px;overflow-y:auto;min-width:0;}
+  .topline{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px;}
+  h1{font-family:'Fraunces',serif;font-weight:600;font-size:24px;margin:0;}
+  .date{font-size:13px;color:var(--ink-soft);}
+  .search-row{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
+  input[type=text], input[type=tel], input[type=date], textarea, select{
+    font-family:'Inter',sans-serif;font-size:14px;border:1px solid var(--line);border-radius:8px;
+    padding:10px 12px;background:#fff;color:var(--ink);width:100%;
+  }
+  input:focus, textarea:focus, select:focus{outline:2px solid var(--gold);outline-offset:1px;border-color:var(--gold);}
+  .search-row input{flex:1;}
+  .btn{font-family:'Inter',sans-serif;font-size:14px;font-weight:600;border-radius:8px;padding:10px 18px;border:1px solid var(--brand);background:var(--brand);color:#fff;cursor:pointer;white-space:nowrap;}
+  .btn:hover{background:var(--brand-light);}
+  .btn.secondary{background:#fff;color:var(--brand);border:1px solid var(--line);}
+  .btn.secondary:hover{background:var(--paper);}
+  .btn.small{padding:6px 12px;font-size:13px;}
+  .btn.gold{background:var(--gold);border-color:var(--gold);}
+  .btn.gold:hover{background:#88611f;}
+  .cards{display:flex;flex-direction:column;gap:10px;}
+  .gcard{border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;background:#fff;}
+  .gcard:hover{border-color:var(--gold);}
+  .gcard-name{font-weight:600;font-size:15px;margin:0 0 3px;}
+  .gcard-meta{font-size:13px;color:var(--ink-soft);}
+  .badge{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;}
+  .badge.occasion{background:var(--rust-soft);color:var(--rust);}
+  .badge.visits{background:var(--gold-soft);color:var(--gold);}
+  .badge.role-manager{background:var(--gold-soft);color:var(--gold);}
+  .badge.role-staff{background:var(--sage-soft);color:var(--sage);}
+  .empty{padding:40px 20px;text-align:center;color:var(--ink-soft);border:1px dashed var(--line);border-radius:var(--radius);}
+  .empty p{margin:4px 0;font-size:14px;}
+  .profile-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;}
+  .back{background:none;border:none;color:var(--ink-soft);font-size:13px;cursor:pointer;padding:0;margin-bottom:14px;}
+  .back:hover{color:var(--ink);}
+  .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px;}
+  .field label{font-size:12px;color:var(--ink-soft);display:block;margin-bottom:4px;}
+  .section{margin-top:26px;}
+  .section h2{font-family:'Fraunces',serif;font-size:17px;font-weight:600;margin:0 0 12px;}
+  .list-row{border-bottom:1px solid var(--line);padding:11px 0;}
+  .list-row:last-child{border-bottom:none;}
+  .list-row .top{display:flex;justify-content:space-between;font-size:13.5px;color:var(--ink-soft);margin-bottom:3px;}
+  .list-row .note{font-size:14px;}
+  .inline-form{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .inline-form input, .inline-form select{flex:1;min-width:120px;}
+  .modal-overlay{position:relative;background:rgba(34,28,23,.45);border-radius:14px;display:flex;align-items:center;justify-content:center;padding:24px;min-height:400px;}
+  .modal{background:#fff;border-radius:12px;padding:26px 28px;width:100%;max-width:420px;}
+  .modal h3{font-family:'Fraunces',serif;margin:0 0 16px;font-size:19px;}
+  .modal .field{margin-bottom:12px;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+  .toast{position:absolute;top:16px;right:16px;background:var(--sage);color:#fff;font-size:13px;font-weight:500;padding:9px 16px;border-radius:8px;}
+  .hidden{display:none !important;}
+  .err{color:var(--rust);font-size:12.5px;margin-top:4px;}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+  .login-wrap{max-width:1180px;margin:60px auto;display:flex;justify-content:center;}
+  .login-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:36px 34px;width:100%;max-width:340px;text-align:left;}
+  .login-card h1{font-size:21px;margin:0 0 4px;}
+  .login-card p.sub{font-size:13px;color:var(--ink-soft);margin:0 0 22px;}
+  .login-card .field{margin-bottom:14px;}
+  .login-card .btn{width:100%;margin-top:6px;}
+  .rail-btn.logout{color:#e8b9a4;}
+  .rail-btn.logout:hover{background:var(--brand-light);}
+</style>
+</head>
+<body>
+<h2 class="sr-only">Tablet prototype of a front-of-house guest recognition app: search guests, log visits, and track upcoming occasions.</h2>
+
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <h1>Guest Book</h1>
+    <p class="sub" id="login-sub">Select your name and enter your PIN to sign in.</p>
+
+    <div id="login-existing">
+      <div class="field"><label style="font-size:12px;color:var(--ink-soft);display:block;margin-bottom:4px;">Staff member</label>
+        <select id="login-select"></select></div>
+      <div class="field"><label style="font-size:12px;color:var(--ink-soft);display:block;margin-bottom:4px;">Your PIN</label>
+        <input type="password" id="login-pin" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="Your PIN"></div>
+      <div id="login-err" class="err hidden">Incorrect PIN for that staff member.</div>
+      <button class="btn gold" id="login-btn">Sign in</button>
+    </div>
+
+    <div id="login-setup" class="hidden">
+      <div class="field"><label style="font-size:12px;color:var(--ink-soft);display:block;margin-bottom:4px;">Your name</label>
+        <input type="text" id="setup-name" placeholder="e.g. Alex"></div>
+      <div class="field"><label style="font-size:12px;color:var(--ink-soft);display:block;margin-bottom:4px;">Choose a PIN</label>
+        <input type="password" id="setup-pin" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="4 to 6 digits (6 is safest)"></div>
+      <div id="setup-err" class="err hidden">Enter a name and a PIN of 4 to 6 digits.</div>
+      <button class="btn gold" id="setup-btn">Create manager account</button>
+    </div>
+  </div>
+</div>
+
+<div class="app hidden" id="app-root">
+  <div class="rail">
+    <p class="rail-brand">Guest Book</p>
+    <p class="rail-sub">FOH recognition system</p>
+    <button class="rail-btn active" id="nav-search" onclick="setView('search')">All guests</button>
+    <button class="rail-btn" id="nav-occasions" onclick="setView('occasions')"><span class="dot" id="occ-dot" style="visibility:hidden"></span>Upcoming occasions</button>
+    <button class="rail-btn" id="nav-retention" onclick="setView('retention')">Data retention</button>
+    <button class="rail-btn" id="nav-new" onclick="openNewGuest()">+ New guest</button>
+    <div class="rail-spacer"></div>
+    <p class="rail-foot" id="signed-in-as"></p>
+    <button class="rail-btn" id="manage-staff-btn">Manage staff</button>
+    <button class="rail-btn logout" id="logout-btn">Sign out</button>
+    <p class="rail-foot" id="rail-status">Loading guest records…</p>
+  </div>
+
+  <div class="main" id="main" style="position:relative;">
+    <div class="topline">
+      <h1 id="page-title">All guests</h1>
+      <span class="date" id="today"></span>
+    </div>
+    <div id="content"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+<script>
+let GUESTS = [];
+let STAFF = [];
+let VIEW = 'search';
+let ACTIVE_ID = null;
+const SESSION_KEY = 'guestbook-session';
+const IDLE_LIMIT_MS = 15 * 60 * 1000;
+let idleTimer = null;
+
+async function api(path, opts){
+  const headers = {'Content-Type':'application/json'};
+  const session = getSession();
+  if(session && session.token){ headers['Authorization'] = 'Bearer ' + session.token; }
+  const res = await fetch('/api' + path, {...opts, headers});
+  if(!res.ok){
+    let data = null;
+    try{ data = await res.json(); }catch(e){}
+    const err = new Error((data && data.error) || ('Request failed: ' + res.status));
+    err.status = res.status;
+    err.data = data;
+    // The server no longer recognises this session (expired, signed out, or server restarted).
+    if(res.status === 401 && session){ signOut('Your session has expired. Please sign in again.'); }
+    // Not allowed: the person's role may have changed since they signed in, so refresh the menus.
+    if(res.status === 403 && session && path !== '/me'){ refreshRole(); }
+    throw err;
+  }
+  if(res.status === 204) return null;
+  return res.json();
+}
+
+function errorMessage(e, fallback){
+  if(e && e.status === 403){ return "You don't have permission to do that. Ask a manager."; }
+  if(e && e.status === 400 && e.message){ return e.message.charAt(0).toUpperCase() + e.message.slice(1) + '.'; }
+  if(e && e.status === 409 && e.message){ return e.message.charAt(0).toUpperCase() + e.message.slice(1) + '.'; }
+  return fallback;
+}
+
+function isManager(){
+  const s = getSession();
+  return !!(s && s.role === 'manager');
+}
+
+// Show or hide the manager-only parts of the app for the person who is signed in.
+function applyRole(){
+  const s = getSession() || {};
+  const manager = s.role === 'manager';
+  document.getElementById('signed-in-as').textContent = 'Signed in as ' + (s.name || '') + ' (' + (manager ? 'Manager' : 'Floor staff') + ')';
+  document.getElementById('nav-retention').classList.toggle('hidden', !manager);
+  document.getElementById('manage-staff-btn').classList.toggle('hidden', !manager);
+  if(!manager && VIEW === 'retention'){ setView('search'); }
+}
+
+async function refreshRole(){
+  try{
+    const me = await api('/me');
+    const s = getSession();
+    if(s){ s.role = me.role; s.name = me.name; setSession(s); }
+    applyRole();
+    render();
+  }catch(e){}
+}
+
+function getSession(){
+  try{
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ return null; }
+}
+function setSession(s){ sessionStorage.setItem(SESSION_KEY, JSON.stringify(s)); }
+function clearSession(){ sessionStorage.removeItem(SESSION_KEY); }
+
+function resetIdleTimer(){
+  if(idleTimer) clearTimeout(idleTimer);
+  idleTimer = setTimeout(()=>{ signOut('Signed out after 15 minutes of inactivity.'); }, IDLE_LIMIT_MS);
+}
+['click','keydown','touchstart'].forEach(evt=>{
+  document.addEventListener(evt, ()=>{ if(getSession()) resetIdleTimer(); });
+});
+
+async function loadStaff(){
+  try{ STAFF = await api('/staff'); }
+  catch(e){ STAFF = []; showConnectionError(); }
+}
+
+function showConnectionError(){
+  document.getElementById('login-sub').textContent = "Can't reach the Guest Book server. Check the server is running and you're on the right Wi-Fi.";
+}
+
+function populateStaffSelect(){
+  const sel = document.getElementById('login-select');
+  sel.innerHTML = STAFF.map(s=>'<option value="'+s.id+'">'+escapeHtml(s.name)+'</option>').join('');
+}
+
+function showLogin(message){
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app-root').classList.add('hidden');
+  const hasStaff = STAFF.length > 0;
+  document.getElementById('login-existing').classList.toggle('hidden', !hasStaff);
+  document.getElementById('login-setup').classList.toggle('hidden', hasStaff);
+  document.getElementById('login-sub').textContent = hasStaff
+    ? 'Select your name and enter your PIN to sign in.'
+    : 'No staff accounts yet. Create the first one: it will be the manager account, which can add floor staff later.';
+  if(hasStaff) populateStaffSelect();
+  const err = document.getElementById('login-err');
+  if(message){ err.textContent = message; err.classList.remove('hidden'); }
+  else { err.classList.add('hidden'); }
+}
+
+function signOut(message){
+  const s = getSession();
+  if(s && s.token){
+    fetch('/api/logout', {method:'POST', headers:{'Authorization':'Bearer ' + s.token}}).catch(()=>{});
+  }
+  clearSession();
+  if(idleTimer) clearTimeout(idleTimer);
+  showLogin(message);
+}
+
+async function enterApp(){
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app-root').classList.remove('hidden');
+  applyRole();
+  try{
+    const me = await api('/me');
+    const s = getSession();
+    if(s){ s.role = me.role; s.name = me.name; setSession(s); }
+    applyRole();
+  }catch(e){
+    if(e.status === 401){ return; } // the session was no longer valid; the login screen is showing
+  }
+  resetIdleTimer();
+  await loadGuests();
+}
+
+document.getElementById('login-btn').onclick = async ()=>{
+  const id = document.getElementById('login-select').value;
+  const pin = document.getElementById('login-pin').value.trim();
+  const err = document.getElementById('login-err');
+  let staff;
+  try{
+    staff = await api('/staff/login', {method:'POST', body: JSON.stringify({id, pin})});
+  }catch(e){
+    if(e.status === 429){
+      const mins = Math.max(1, Math.ceil(((e.data && e.data.retryAfterSeconds) || 900) / 60));
+      err.textContent = 'Too many wrong PINs. This account is locked for about ' + mins + ' minute' + (mins===1?'':'s') + '.';
+    }else if(!e.status){
+      err.textContent = "Can't reach the server. Check your Wi-Fi and try again.";
+    }else{
+      err.textContent = 'Incorrect PIN for that staff member.';
+    }
+    err.classList.remove('hidden');
+    return;
+  }
+  setSession({id: staff.id, name: staff.name, token: staff.token, role: staff.role, loginTime: Date.now()});
+  document.getElementById('login-pin').value = '';
+  await enterApp();
+};
+
+document.getElementById('setup-btn').onclick = async ()=>{
+  const name = document.getElementById('setup-name').value.trim();
+  const pin = document.getElementById('setup-pin').value.trim();
+  const err = document.getElementById('setup-err');
+  if(!name || !/^\d{4,6}$/.test(pin)){
+    err.textContent = 'Enter a name and a PIN of 4 to 6 digits.';
+    err.classList.remove('hidden');
+    return;
+  }
+  let staff;
+  try{
+    staff = await api('/staff', {method:'POST', body: JSON.stringify({name, pin})});
+  }catch(e){
+    err.textContent = errorMessage(e, 'Could not create the account. Try again.');
+    err.classList.remove('hidden');
+    return;
+  }
+  STAFF.push({id: staff.id, name: staff.name});
+  setSession({id: staff.id, name: staff.name, token: staff.token, role: staff.role, loginTime: Date.now()});
+  document.getElementById('setup-pin').value = '';
+  await enterApp();
+};
+
+document.getElementById('logout-btn').onclick = ()=> signOut(null);
+
+document.getElementById('manage-staff-btn').onclick = openManageStaff;
+
+async function openManageStaff(){
+  let staffList;
+  try{ staffList = await api('/staff/all'); }
+  catch(e){ if(e.status !== 401){ alert(errorMessage(e, 'Could not load the staff list.')); } return; }
+  const me = getSession() || {};
+  const main = document.getElementById('main');
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  overlay.style.position='fixed'; overlay.style.inset='0'; overlay.style.zIndex='50'; overlay.style.borderRadius='0'; overlay.style.overflowY='auto';
+  const rows = staffList.map(s=>{
+    const mine = s.id === me.id;
+    const roleLabel = s.role === 'manager' ? 'Manager' : 'Floor staff';
+    const toRole = s.role === 'manager' ? 'staff' : 'manager';
+    const toLabel = s.role === 'manager' ? 'Make floor staff' : 'Make manager';
+    return '<div class="list-row" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">'+
+      '<span><strong>'+escapeHtml(s.name)+'</strong> <span class="badge role-'+s.role+'">'+roleLabel+'</span>'+(mine?' <span style="font-size:12px;color:var(--ink-soft);">(you)</span>':'')+'</span>'+
+      (mine ? '' :
+        '<span style="display:flex;gap:6px;">'+
+          '<button class="btn secondary small" data-role="'+s.id+'" data-to="'+toRole+'">'+toLabel+'</button>'+
+          '<button class="btn secondary small" data-remove="'+s.id+'" data-name="'+escapeHtml(s.name)+'">Remove</button>'+
+        '</span>')+
+    '</div>';
+  }).join('') || '<p style="font-size:14px;color:var(--ink-soft);">No staff accounts yet.</p>';
+  overlay.innerHTML = '<div class="modal" style="max-width:520px;">'+
+    '<h3>Manage staff</h3>'+
+    '<p style="font-size:13px;color:var(--ink-soft);margin:0 0 12px;line-height:1.5;">Managers can do everything. Floor staff can look up and edit guests and log visits and occasions, but cannot delete guests or manage staff.</p>'+
+    '<div style="max-height:240px;overflow-y:auto;margin-bottom:16px;">'+rows+'</div>'+
+    '<div class="field"><label style="font-size:12px;color:var(--ink-soft);display:block;margin-bottom:4px;">Add staff member</label>'+
+      '<input type="text" id="ms-name" placeholder="Name" style="margin-bottom:8px;">'+
+      '<input type="password" id="ms-pin" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="4 to 6 digits (6 is safest)" style="margin-bottom:8px;">'+
+      '<select id="ms-role"><option value="staff">Floor staff</option><option value="manager">Manager</option></select></div>'+
+    '<div id="ms-err" class="err hidden">Enter a name and a PIN of 4 to 6 digits.</div>'+
+    '<div class="modal-actions">'+
+      '<button class="btn secondary" id="ms-close">Close</button>'+
+      '<button class="btn gold" id="ms-add">Add staff member</button>'+
+    '</div>'+
+  '</div>';
+  main.appendChild(overlay);
+  const reopen = ()=>{ overlay.remove(); openManageStaff(); };
+  overlay.querySelectorAll('[data-role]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      try{ await api('/staff/'+btn.getAttribute('data-role')+'/role', {method:'PUT', body: JSON.stringify({role: btn.getAttribute('data-to')})}); }
+      catch(e){ if(e.status !== 401){ alert(errorMessage(e, 'Could not change that role.')); } return; }
+      reopen();
+    };
+  });
+  overlay.querySelectorAll('[data-remove]').forEach(btn=>{
+    btn.onclick = async ()=>{
+      const id = btn.getAttribute('data-remove');
+      if(!confirm('Remove ' + btn.getAttribute('data-name') + '? They will be signed out straight away.')) return;
+      try{ await api('/staff/'+id, {method:'DELETE'}); }
+      catch(e){ if(e.status !== 401){ alert(errorMessage(e, 'Could not remove that account.')); } return; }
+      STAFF = STAFF.filter(s=>s.id!==id);
+      reopen();
+    };
+  });
+  document.getElementById('ms-close').onclick = ()=> overlay.remove();
+  document.getElementById('ms-add').onclick = async ()=>{
+    const name = document.getElementById('ms-name').value.trim();
+    const pin = document.getElementById('ms-pin').value.trim();
+    const role = document.getElementById('ms-role').value;
+    const msErr = document.getElementById('ms-err');
+    if(!name || !/^\d{4,6}$/.test(pin)){ msErr.textContent = 'Enter a name and a PIN of 4 to 6 digits.'; msErr.classList.remove('hidden'); return; }
+    let staff;
+    try{
+      staff = await api('/staff', {method:'POST', body: JSON.stringify({name, pin, role})});
+    }catch(e){ if(e.status === 401){ return; } msErr.textContent = errorMessage(e, 'Could not add that staff member.'); msErr.classList.remove('hidden'); return; }
+    STAFF.push({id: staff.id, name: staff.name});
+    reopen();
+  };
+}
+
+const todayEl = document.getElementById('today');
+todayEl.textContent = new Date().toLocaleDateString(undefined,{weekday:'long', year:'numeric', month:'long', day:'numeric'});
+
+function lastActivityDate(guest){
+  const dates = (guest.visits||[]).map(v=>v.date);
+  if(guest.created_at) dates.push(guest.created_at.slice(0,10));
+  if(dates.length===0) return null;
+  return new Date(Math.max(...dates.map(d=>new Date(d).getTime())));
+}
+function isStale(guest){
+  const last = lastActivityDate(guest);
+  if(!last) return false;
+  const twoYearsAgo = new Date();
+  twoYearsAgo.setFullYear(twoYearsAgo.getFullYear()-2);
+  return last < twoYearsAgo;
+}
+function lastActivityLabel(guest){
+  const last = lastActivityDate(guest);
+  return last ? last.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'}) : 'Unknown';
+}
+
+function daysUntilNextOccasion(guest){
+  if(!guest.occasions || guest.occasions.length===0) return null;
+  const now = new Date(); now.setHours(0,0,0,0);
+  let best = null;
+  guest.occasions.forEach(o=>{
+    const d = new Date(o.date);
+    const next = new Date(now.getFullYear(), d.getMonth(), d.getDate());
+    if(next < now) next.setFullYear(now.getFullYear()+1);
+    const diff = Math.round((next-now)/86400000);
+    if(best===null || diff < best.diff) best = {diff, type:o.type, date:o.date};
+  });
+  return best;
+}
+
+function statusLabel(){
+  return GUESTS.length + ' guest record' + (GUESTS.length===1?'':'s') + ' · shared across staff';
+}
+
+async function loadGuests(){
+  try{ GUESTS = await api('/guests'); }
+  catch(e){ GUESTS = []; }
+  document.getElementById('rail-status').textContent = statusLabel();
+  render();
+}
+
+function refreshStatus(){
+  document.getElementById('rail-status').textContent = statusLabel();
+}
+
+function setView(v){
+  if(v === 'retention' && !isManager()){ v = 'search'; }
+  VIEW = v; ACTIVE_ID = null; window._shown = 50;
+  document.getElementById('nav-search').classList.toggle('active', v==='search');
+  document.getElementById('nav-occasions').classList.toggle('active', v==='occasions');
+  document.getElementById('nav-retention').classList.toggle('active', v==='retention');
+  document.getElementById('page-title').textContent = v==='search' ? 'All guests' : (v==='occasions' ? 'Upcoming occasions' : 'Data retention review');
+  render();
+}
+
+function openGuest(id){ ACTIVE_ID = id; VIEW='profile'; render(); }
+
+function render(){
+  const content = document.getElementById('content');
+  const upcoming = GUESTS.filter(g=>{ const n = daysUntilNextOccasion(g); return n && n.diff<=14; });
+  const occDot = document.getElementById('occ-dot');
+  occDot.style.visibility = upcoming.length>0 ? 'visible' : 'hidden';
+
+  if(VIEW==='profile' && ACTIVE_ID){
+    document.getElementById('page-title').textContent = 'Guest profile';
+    content.innerHTML = '';
+    content.appendChild(renderProfile(GUESTS.find(g=>g.id===ACTIVE_ID)));
+    return;
+  }
+
+  if(VIEW==='occasions'){
+    content.innerHTML = '';
+    if(upcoming.length===0){
+      content.innerHTML = '<div class="empty"><p>No birthdays or anniversaries in the next 14 days.</p><p>Add an occasion from a guest profile to see it here.</p></div>';
+      return;
+    }
+    const sorted = _.sortBy(upcoming, g=>daysUntilNextOccasion(g).diff);
+    const wrap = document.createElement('div'); wrap.className='cards';
+    sorted.forEach(g=>{
+      const n = daysUntilNextOccasion(g);
+      wrap.appendChild(guestCard(g, n));
+    });
+    content.appendChild(wrap);
+    return;
+  }
+
+  if(VIEW==='retention'){
+    content.innerHTML = '';
+    const stale = GUESTS.filter(isStale);
+    const note = document.createElement('p');
+    note.style.cssText='font-size:13.5px;color:var(--ink-soft);margin:0 0 16px;';
+    note.textContent = 'Guests with no activity in over 2 years — review and remove records no longer needed, in line with data retention obligations.';
+    content.appendChild(note);
+    if(stale.length===0){
+      content.innerHTML += '<div class="empty"><p>No guest records are overdue for review.</p></div>';
+      return;
+    }
+    const wrap = document.createElement('div'); wrap.className='cards';
+    stale.forEach(g=>{
+      const card = document.createElement('div'); card.className='gcard';
+      const left = document.createElement('div');
+      left.innerHTML = '<p class="gcard-name">'+escapeHtml(g.name)+'</p><p class="gcard-meta">Last activity: '+lastActivityLabel(g)+'</p>';
+      card.appendChild(left);
+      const right = document.createElement('div'); right.style.display='flex'; right.style.gap='8px';
+      const viewBtn = document.createElement('button'); viewBtn.className='btn secondary small'; viewBtn.textContent='View';
+      viewBtn.onclick = ()=> openGuest(g.id);
+      const removeBtn = document.createElement('button'); removeBtn.className='btn secondary small'; removeBtn.textContent='Remove';
+      removeBtn.onclick = async ()=>{
+        if(!confirm('Remove ' + g.name + ' and all their records? This cannot be undone.')) return;
+        try{ await api('/guests/'+g.id, {method:'DELETE'}); }
+        catch(e){ if(e.status !== 401){ alert(errorMessage(e, 'Could not remove that guest.')); } return; }
+        GUESTS = GUESTS.filter(x=>x.id!==g.id);
+        refreshStatus(); render();
+      };
+      right.appendChild(viewBtn); right.appendChild(removeBtn);
+      card.appendChild(right);
+      wrap.appendChild(card);
+    });
+    content.appendChild(wrap);
+    return;
+  }
+
+  // search view
+  content.innerHTML = '';
+  const searchRow = document.createElement('div'); searchRow.className='search-row';
+  const input = document.createElement('input');
+  input.type='text'; input.placeholder='Search by name, phone, or notes (e.g. "vegetarian")';
+  input.value = window._lastQuery || '';
+  input.oninput = ()=>{ window._lastQuery = input.value; window._shown = 50; renderList(); };
+  searchRow.appendChild(input);
+
+  const typeSelect = document.createElement('select');
+  typeSelect.style.maxWidth='160px';
+  typeSelect.innerHTML = '<option value="">Any occasion</option><option value="Birthday">Birthday</option><option value="Anniversary">Anniversary</option><option value="Other">Other</option>';
+  typeSelect.value = window._filterType || '';
+  typeSelect.onchange = ()=>{ window._filterType = typeSelect.value; window._shown = 50; renderList(); };
+  searchRow.appendChild(typeSelect);
+
+  const monthSelect = document.createElement('select');
+  monthSelect.style.maxWidth='150px';
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  monthSelect.innerHTML = '<option value="">Any month</option>' + months.map((m,i)=>'<option value="'+i+'">'+m+'</option>').join('');
+  monthSelect.value = (window._filterMonth===undefined || window._filterMonth===null) ? '' : window._filterMonth;
+  monthSelect.onchange = ()=>{ window._filterMonth = monthSelect.value; window._shown = 50; renderList(); };
+  searchRow.appendChild(monthSelect);
+
+  content.appendChild(searchRow);
+
+  if(window._filterType || (window._filterMonth!==undefined && window._filterMonth!=='')){
+    const monthsFull = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const parts = [];
+    if(window._filterType) parts.push(window._filterType);
+    if(window._filterMonth!=='' && window._filterMonth!==undefined) parts.push('in ' + monthsFull[parseInt(window._filterMonth,10)]);
+    const banner = document.createElement('div');
+    banner.style.cssText = 'display:flex;justify-content:space-between;align-items:center;background:var(--gold-soft);color:var(--gold);border-radius:8px;padding:9px 14px;font-size:13.5px;font-weight:600;margin-bottom:16px;';
+    banner.innerHTML = '<span>Showing only: ' + parts.join(' ') + ' — other guests are hidden</span>';
+    const clearBtn = document.createElement('button');
+    clearBtn.className='btn gold small';
+    clearBtn.textContent='Clear filter';
+    clearBtn.onclick = ()=>{ window._filterType=''; window._filterMonth=''; window._shown = 50; render(); };
+    banner.appendChild(clearBtn);
+    content.appendChild(banner);
+  }
+
+  const listWrap = document.createElement('div'); listWrap.id='list-wrap';
+  content.appendChild(listWrap);
+  renderList();
+}
+
+function guestMatchesOccasionFilter(g){
+  const type = window._filterType || '';
+  const month = (window._filterMonth===undefined || window._filterMonth==='') ? null : parseInt(window._filterMonth, 10);
+  if(!type && month===null) return true;
+  const occs = g.occasions || [];
+  return occs.some(o=>{
+    const typeOk = !type || o.type === type;
+    const occMonth = parseInt(String(o.date).split('-')[1], 10) - 1;
+    const monthOk = month===null || occMonth === month;
+    return typeOk && monthOk;
+  });
+}
+
+function renderList(){
+  const q = (window._lastQuery||'').trim().toLowerCase();
+  const listWrap = document.getElementById('list-wrap');
+  if(!listWrap) return;
+  let list = GUESTS;
+  if(q) list = list.filter(g=> g.name.toLowerCase().includes(q) || (g.phone||'').includes(q) || (g.notes||'').toLowerCase().includes(q));
+  list = list.filter(guestMatchesOccasionFilter);
+  list = _.sortBy(list, g=> -( (g.visits && g.visits.length) ? new Date(_.maxBy(g.visits,'date').date).getTime() : 0));
+  if(list.length===0){
+    listWrap.innerHTML = '<div class="empty"><p>No guests match.</p><p>Try a different search or clear the filters.</p></div>';
+    return;
+  }
+  listWrap.innerHTML='';
+  const wrap = document.createElement('div'); wrap.className='cards';
+  const PAGE = 50;
+  const total = list.length;
+  const shown = Math.min(window._shown || PAGE, total);
+  const summary = document.createElement('p');
+  summary.style.cssText='font-size:13px;color:var(--ink-soft);margin:0 0 10px;';
+  summary.textContent = 'Showing ' + shown + ' of ' + total + ' guest' + (total===1?'':'s');
+  listWrap.appendChild(summary);
+  list.slice(0, shown).forEach(g=> wrap.appendChild(guestCard(g, daysUntilNextOccasion(g))));
+  listWrap.appendChild(wrap);
+  if(shown < total){
+    const more = document.createElement('button');
+    more.className='btn secondary';
+    more.style.cssText='margin-top:14px;width:100%;';
+    more.textContent = 'Show ' + Math.min(PAGE, total-shown) + ' more';
+    more.onclick = ()=>{ window._shown = shown + PAGE; renderList(); };
+    listWrap.appendChild(more);
+  }
+}
+
+function guestCard(g, occasionInfo){
+  const card = document.createElement('div'); card.className='gcard';
+  card.onclick = ()=>openGuest(g.id);
+  const left = document.createElement('div');
+  left.innerHTML = '<p class="gcard-name">'+escapeHtml(g.name)+'</p><p class="gcard-meta">'+escapeHtml(g.phone||'No phone on file')+'</p>'+
+    (g.notes ? '<p class="gcard-meta" style="font-style:italic;margin-top:2px;">'+escapeHtml(g.notes)+'</p>' : '');
+  card.appendChild(left);
+  const right = document.createElement('div');
+  right.style.display='flex'; right.style.gap='8px'; right.style.alignItems='center';
+  if(g.visits && g.visits.length){
+    const b = document.createElement('span'); b.className='badge visits';
+    b.textContent = g.visits.length + ' visit' + (g.visits.length===1?'':'s');
+    right.appendChild(b);
+  }
+  if(occasionInfo){
+    const b = document.createElement('span'); b.className='badge occasion';
+    b.textContent = occasionInfo.diff===0 ? occasionInfo.type+' today' : occasionInfo.type+' in '+occasionInfo.diff+'d';
+    right.appendChild(b);
+  }
+  card.appendChild(right);
+  return card;
+}
+
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function renderProfile(g){
+  const wrap = document.createElement('div');
+  const back = document.createElement('button'); back.className='back'; back.textContent='← Back to all guests';
+  back.onclick = ()=>setView('search');
+  wrap.appendChild(back);
+
+  const head = document.createElement('div'); head.className='profile-head';
+  head.innerHTML = '<div><h1 style="margin-bottom:4px;">'+escapeHtml(g.name)+'</h1>'+
+    '<p style="color:var(--ink-soft);font-size:14px;margin:0;">'+escapeHtml(g.phone||'No phone on file')+(g.email?' · '+escapeHtml(g.email):'')+'</p></div>';
+  const btnRow = document.createElement('div'); btnRow.style.cssText='display:flex;gap:8px;';
+  const editBtn = document.createElement('button'); editBtn.className='btn secondary small'; editBtn.textContent='Edit details';
+  editBtn.onclick = ()=> openEditGuest(g);
+  const delBtn = document.createElement('button'); delBtn.className='btn secondary small'; delBtn.textContent='Remove guest';
+  delBtn.onclick = async ()=>{
+    if(!confirm('Remove ' + g.name + ' and all their records? This cannot be undone.')) return;
+    try{ await api('/guests/'+g.id, {method:'DELETE'}); }
+    catch(e){ if(e.status !== 401){ alert(errorMessage(e, 'Could not remove that guest.')); } return; }
+    GUESTS = GUESTS.filter(x=>x.id!==g.id);
+    refreshStatus();
+    setView('search');
+  };
+  btnRow.appendChild(editBtn);
+  if(isManager()){ btnRow.appendChild(delBtn); } // only managers can delete guests
+  head.appendChild(btnRow);
+  wrap.appendChild(head);
+
+  if(g.notes){
+    const notes = document.createElement('p'); notes.style.cssText='font-size:14px;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 14px;';
+    notes.textContent = g.notes;
+    wrap.appendChild(notes);
+  }
+
+  // Visit history
+  const visitSec = document.createElement('div'); visitSec.className='section';
+  visitSec.innerHTML = '<h2>Visit history</h2>';
+  const visits = _.orderBy(g.visits||[], 'date', 'desc');
+  if(visits.length===0){
+    visitSec.innerHTML += '<p style="font-size:14px;color:var(--ink-soft);">No visits logged yet.</p>';
+  }else{
+    visits.forEach(v=>{
+      const row = document.createElement('div'); row.className='list-row';
+      row.innerHTML = '<div class="top"><span>'+new Date(v.date).toLocaleDateString()+'</span><span>'+(v.loggedBy?'Logged by '+escapeHtml(v.loggedBy):'')+'</span></div><div class="note">'+escapeHtml(v.note||'No notes for this visit.')+'</div>';
+      visitSec.appendChild(row);
+    });
+  }
+  const visitForm = document.createElement('div'); visitForm.className='inline-form';
+  const vDate = document.createElement('input'); vDate.type='date'; vDate.value=new Date().toISOString().slice(0,10);
+  const vNote = document.createElement('input'); vNote.type='text'; vNote.placeholder='Note for this visit (optional)';
+  const vBtn = document.createElement('button'); vBtn.className='btn gold small'; vBtn.textContent='Log visit';
+  vBtn.onclick = async ()=>{
+    let visit;
+    try{
+      visit = await api('/guests/'+g.id+'/visits', {method:'POST', body: JSON.stringify({date: vDate.value, note: vNote.value.trim()})});
+    }catch(e){ if(e.status !== 401){ alert(errorMessage(e, 'Could not log the visit. Try again.')); } return; }
+    g.visits = g.visits || [];
+    g.visits.push(visit);
+    render();
+  };
+  visitForm.appendChild(vDate); visitForm.appendChild(vNote); visitForm.appendChild(vBtn);
+  visitSec.appendChild(visitForm);
+  wrap.appendChild(visitSec);
+
+  // Occasions
+  const occSec = document.createElement('div'); occSec.className='section';
+  occSec.innerHTML = '<h2>Occasions</h2>';
+  const occs = g.occasions||[];
+  if(occs.length===0){
+    occSec.innerHTML += '<p style="font-size:14px;color:var(--ink-soft);">No occasions recorded.</p>';
+  }else{
+    occs.forEach(o=>{
+      const row = document.createElement('div'); row.className='list-row';
+      row.innerHTML = '<div class="top"><span>'+o.type+'</span><span>'+new Date(o.date).toLocaleDateString(undefined,{month:'long',day:'numeric'})+'</span></div>';
+      occSec.appendChild(row);
+    });
+  }
+  const occForm = document.createElement('div'); occForm.className='inline-form';
+  const oType = document.createElement('select');
+  oType.innerHTML = '<option value="Birthday">Birthday</option><option value="Anniversary">Anniversary</option><option value="Other">Other</option>';
+  const oDate = document.createElement('input'); oDate.type='date';
+  const oBtn = document.createElement('button'); oBtn.className='btn gold small'; oBtn.textContent='Add occasion';
+  oBtn.onclick = async ()=>{
+    if(!oDate.value) return;
+    let occasion;
+    try{
+      occasion = await api('/guests/'+g.id+'/occasions', {method:'POST', body: JSON.stringify({type: oType.value, date: oDate.value})});
+    }catch(e){ if(e.status !== 401){ alert(errorMessage(e, 'Could not add the occasion. Try again.')); } return; }
+    g.occasions = g.occasions || [];
+    g.occasions.push(occasion);
+    render();
+  };
+  occForm.appendChild(oType); occForm.appendChild(oDate); occForm.appendChild(oBtn);
+  occSec.appendChild(occForm);
+  wrap.appendChild(occSec);
+
+  return wrap;
+}
+
+function isValidPhone(phone){
+  return /^\d{10}$/.test(phone.replace(/[\s-]/g, ''));
+}
+
+function openNewGuest(){
+  const main = document.getElementById('main');
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  overlay.style.position='fixed'; overlay.style.inset='0'; overlay.style.zIndex='50'; overlay.style.borderRadius='0'; overlay.style.overflowY='auto';
+  overlay.innerHTML = '<div class="modal">'+
+    '<h3>New guest</h3>'+
+    '<div class="field"><label>Name</label><input type="text" id="ng-name" placeholder="Full name"></div>'+
+    '<div class="field"><label>Phone number</label><input type="tel" id="ng-phone" placeholder="04xx xxx xxx" inputmode="numeric"></div>'+
+    '<div class="field"><label>Email (optional)</label><input type="text" id="ng-email" placeholder="name@example.com"></div>'+
+    '<div class="field"><label>Notes (optional)</label><input type="text" id="ng-notes" placeholder="Preferences, allergies, seating, etc."></div>'+
+    '<div id="ng-err" class="err hidden">Enter a name and a valid 10-digit phone number.</div>'+
+    '<div class="modal-actions">'+
+      '<button class="btn secondary" id="ng-cancel">Cancel</button>'+
+      '<button class="btn gold" id="ng-save">Add guest</button>'+
+    '</div>'+
+  '</div>';
+  main.appendChild(overlay);
+  document.getElementById('ng-cancel').onclick = ()=> overlay.remove();
+  document.getElementById('ng-save').onclick = async ()=>{
+    const name = document.getElementById('ng-name').value.trim();
+    const phone = document.getElementById('ng-phone').value.trim();
+    const err = document.getElementById('ng-err');
+    if(!name || !isValidPhone(phone)){ err.classList.remove('hidden'); return; }
+    err.classList.add('hidden');
+    let g;
+    try{
+      g = await api('/guests', {method:'POST', body: JSON.stringify({
+        name, phone,
+        email: document.getElementById('ng-email').value.trim(),
+        notes: document.getElementById('ng-notes').value.trim(),
+      })});
+    }catch(e){ if(e.status===401){ return; } err.textContent=errorMessage(e, 'Could not save — check the details and try again.'); err.classList.remove('hidden'); return; }
+    GUESTS.push(g);
+    refreshStatus();
+    window._filterType = '';
+    window._filterMonth = '';
+    overlay.remove();
+    openGuest(g.id);
+  };
+}
+function openEditGuest(g){
+  const main = document.getElementById('main');
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  overlay.style.position='fixed'; overlay.style.inset='0'; overlay.style.zIndex='50'; overlay.style.borderRadius='0'; overlay.style.overflowY='auto';
+  overlay.innerHTML = '<div class="modal">'+
+    '<h3>Edit guest details</h3>'+
+    '<div class="field"><label>Name</label><input type="text" id="eg-name" value="'+escapeHtml(g.name)+'"></div>'+
+    '<div class="field"><label>Phone number</label><input type="tel" id="eg-phone" value="'+escapeHtml(g.phone||'')+'" inputmode="numeric"></div>'+
+    '<div class="field"><label>Email (optional)</label><input type="text" id="eg-email" value="'+escapeHtml(g.email||'')+'"></div>'+
+    '<div class="field"><label>Notes (optional)</label><input type="text" id="eg-notes" value="'+escapeHtml(g.notes||'')+'"></div>'+
+    '<div id="eg-err" class="err hidden">Enter a name and a valid 10-digit phone number.</div>'+
+    '<div class="modal-actions">'+
+      '<button class="btn secondary" id="eg-cancel">Cancel</button>'+
+      '<button class="btn gold" id="eg-save">Save changes</button>'+
+    '</div>'+
+  '</div>';
+  main.appendChild(overlay);
+  document.getElementById('eg-cancel').onclick = ()=> overlay.remove();
+  document.getElementById('eg-save').onclick = async ()=>{
+    const name = document.getElementById('eg-name').value.trim();
+    const phone = document.getElementById('eg-phone').value.trim();
+    const err = document.getElementById('eg-err');
+    if(!name || !isValidPhone(phone)){ err.classList.remove('hidden'); return; }
+    err.classList.add('hidden');
+    let updated;
+    try{
+      updated = await api('/guests/'+g.id, {method:'PUT', body: JSON.stringify({
+        name, phone,
+        email: document.getElementById('eg-email').value.trim(),
+        notes: document.getElementById('eg-notes').value.trim(),
+      })});
+    }catch(e){ if(e.status===401){ return; } err.textContent=errorMessage(e, 'Could not save — check the details and try again.'); err.classList.remove('hidden'); return; }
+    Object.assign(g, updated, {visits: g.visits, occasions: g.occasions});
+    overlay.remove();
+    render();
+  };
+}
+
+async function init(){
+  await loadStaff();
+  const session = getSession();
+  if(session){ await enterApp(); }
+  else { showLogin(null); }
+}
+init();
+</script>
+</body>
+</html>
