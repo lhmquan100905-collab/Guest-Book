@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# The live database holds guest records and staff PIN hashes. Never commit it.
+guestbook.db
+guestbook.db-wal
+guestbook.db-shm
+guestbook.db-journal
+
+# Customer data files used for importing. Keep out of GitHub.
+guests.csv
+guests_*.csv
+*.csv
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
