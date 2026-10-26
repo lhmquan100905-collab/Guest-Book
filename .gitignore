@@ -16,3 +16,9 @@ guests_*.csv
 .DS_Store
 Thumbs.db
 .vscode/
+
+# HTTPS certificates and keys. Never commit these.
+certs/
+*.pem
+*.key
+*.crt
