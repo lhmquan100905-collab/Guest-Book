@@ -61,7 +61,26 @@
   .gcard-meta{font-size:13px;color:var(--ink-soft);}
   .badge{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;}
   .badge.occasion{background:var(--rust-soft);color:var(--rust);}
+  .badge.since{background:#eceae4;color:var(--ink-soft);}
+  .badge.since.long{background:#f3e3c4;color:#8a5a12;}
   .badge.visits{background:var(--gold-soft);color:var(--gold);}
+  .tag{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;display:inline-block;}
+  .tag.allergy{background:var(--rust-soft);color:var(--rust);border:1px solid #e9c5b3;}
+  .tag.diet{background:var(--sage-soft);color:var(--sage);}
+  .tag.service{background:var(--gold-soft);color:var(--gold);}
+  .tagrow{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+  .tagpick{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;}
+  .tgroup{border:1px solid var(--line);border-radius:10px;padding:10px 12px 12px;background:#fcfbf8;}
+  .tgroup.allergy{border-left:4px solid var(--rust);} .tgroup.diet{border-left:4px solid var(--sage);} .tgroup.service{border-left:4px solid var(--gold);}
+  .tgroup h4 span{font-weight:500;text-transform:none;letter-spacing:0;margin-left:6px;color:var(--ink);}
+  .tgroup .chip{padding:5px 12px;min-height:36px;font-size:13.5px;}
+  .tgroup .chipset{gap:6px;}
+  .tagpick h4{font-size:12px;color:var(--ink-soft);margin:0 0 8px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+  .chipset{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{border:1px solid var(--line);border-radius:22px;padding:9px 15px;background:#fff;font-size:14px;cursor:pointer;min-height:42px;font-family:inherit;color:var(--ink);}
+  .chip.on.allergy{background:var(--rust);border-color:var(--rust);color:#fff;}
+  .chip.on.diet{background:var(--sage);border-color:var(--sage);color:#fff;}
+  .chip.on.service{background:var(--gold);border-color:var(--gold);color:#fff;}
   .badge.role-manager{background:var(--gold-soft);color:var(--gold);}
   .badge.role-staff{background:var(--sage-soft);color:var(--sage);}
   .empty{padding:40px 20px;text-align:center;color:var(--ink-soft);border:1px dashed var(--line);border-radius:var(--radius);}
@@ -79,8 +98,12 @@
   .list-row .note{font-size:14px;}
   .inline-form{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
   .inline-form input, .inline-form select{flex:1;min-width:120px;}
-  .modal-overlay{position:relative;background:rgba(34,28,23,.45);border-radius:14px;display:flex;align-items:center;justify-content:center;padding:24px;min-height:400px;}
-  .modal{background:#fff;border-radius:12px;padding:26px 28px;width:100%;max-width:420px;}
+  .modal-overlay{position:relative;background:rgba(34,28,23,.45);border-radius:14px;display:flex;align-items:flex-start;justify-content:center;padding:24px;min-height:400px;}
+  .modal{background:#fff;border-radius:12px;padding:26px 28px;width:100%;max-width:420px;margin:auto;}
+  .modal.wide{max-width:780px;}
+  .modal .grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px;}
+  @media(max-width:600px){.modal .grid2{grid-template-columns:1fr;}}
+  .modal-actions.sticky{position:sticky;bottom:-26px;background:#fff;padding:12px 0 4px;border-top:1px solid var(--line);}
   .modal h3{font-family:'Fraunces',serif;margin:0 0 16px;font-size:19px;}
   .modal .field{margin-bottom:12px;}
   .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
@@ -137,6 +160,8 @@
     <div class="rail-spacer"></div>
     <p class="rail-foot" id="signed-in-as"></p>
     <button class="rail-btn" id="manage-staff-btn">Manage staff</button>
+    <button class="rail-btn" id="notes-tags-btn">Notes → tags</button>
+    <button class="rail-btn" id="activity-btn">Activity log</button>
     <button class="rail-btn logout" id="logout-btn">Sign out</button>
     <p class="rail-foot" id="rail-status">Loading guest records…</p>
   </div>
@@ -153,6 +178,47 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
 <script>
 let GUESTS = [];
+let TAG_GROUPS = [];        // fixed list from the server (/api/tags)
+let TAG_LABEL = {}, TAG_KIND = {};
+async function loadTags(){
+  try{
+    TAG_GROUPS = await api('/tags');
+    TAG_LABEL = {}; TAG_KIND = {};
+    TAG_GROUPS.forEach(gr=>gr.tags.forEach(tg=>{ TAG_LABEL[tg.id]=tg.label; TAG_KIND[tg.id]=gr.kind; }));
+  }catch(e){ TAG_GROUPS = []; }
+}
+const KIND_ORDER = {allergy:0, diet:1, service:2};
+function sortedTags(ids){ return (ids||[]).filter(id=>TAG_LABEL[id]).slice().sort((a,b)=>(KIND_ORDER[TAG_KIND[a]]-KIND_ORDER[TAG_KIND[b]]) || TAG_LABEL[a].localeCompare(TAG_LABEL[b])); }
+function tagRow(ids){
+  const row = document.createElement('div'); row.className='tagrow';
+  sortedTags(ids).forEach(id=>{
+    const s = document.createElement('span'); s.className='tag '+TAG_KIND[id];
+    s.textContent = (TAG_KIND[id]==='allergy' ? 'Allergy: ' : '') + TAG_LABEL[id];
+    row.appendChild(s);
+  });
+  return row;
+}
+// Tap-to-select chips. Returns {el, get()} so the form can read the chosen tag ids.
+function buildTagPicker(selected){
+  const chosen = new Set(selected||[]);
+  const el = document.createElement('div'); el.className='tagpick';
+  TAG_GROUPS.forEach(gr=>{
+    const box = document.createElement('div'); box.className='tgroup '+gr.kind;
+    const h = document.createElement('h4'); box.appendChild(h);
+    const count = document.createElement('span');
+    const upd = ()=>{ const n = gr.tags.filter(x=>chosen.has(x.id)).length; count.textContent = n ? n+' selected' : ''; };
+    h.textContent = gr.group; h.appendChild(count);
+    const set = document.createElement('div'); set.className='chipset';
+    gr.tags.forEach(tg=>{
+      const b = document.createElement('button'); b.type='button'; b.className='chip '+gr.kind+(chosen.has(tg.id)?' on':'');
+      b.textContent = tg.label; b.setAttribute('aria-pressed', chosen.has(tg.id)?'true':'false');
+      b.onclick = ()=>{ if(chosen.has(tg.id)) chosen.delete(tg.id); else chosen.add(tg.id); b.classList.toggle('on', chosen.has(tg.id)); b.setAttribute('aria-pressed', chosen.has(tg.id)?'true':'false'); upd(); };
+      set.appendChild(b);
+    });
+    box.appendChild(set); el.appendChild(box); upd();
+  });
+  return { el, get: ()=>Array.from(chosen) };
+}
 let STAFF = [];
 let VIEW = 'search';
 let ACTIVE_ID = null;
@@ -200,6 +266,8 @@ function applyRole(){
   document.getElementById('signed-in-as').textContent = 'Signed in as ' + (s.name || '') + ' (' + (manager ? 'Manager' : 'Floor staff') + ')';
   document.getElementById('nav-retention').classList.toggle('hidden', !manager);
   document.getElementById('manage-staff-btn').classList.toggle('hidden', !manager);
+  document.getElementById('activity-btn').classList.toggle('hidden', !manager);
+  document.getElementById('notes-tags-btn').classList.toggle('hidden', !manager);
   if(!manager && VIEW === 'retention'){ setView('search'); }
 }
 
@@ -282,6 +350,7 @@ async function enterApp(){
     if(e.status === 401){ return; } // the session was no longer valid; the login screen is showing
   }
   resetIdleTimer();
+  await loadTags();
   await loadGuests();
 }
 
@@ -335,6 +404,57 @@ document.getElementById('setup-btn').onclick = async ()=>{
 document.getElementById('logout-btn').onclick = ()=> signOut(null);
 
 document.getElementById('manage-staff-btn').onclick = openManageStaff;
+document.getElementById('activity-btn').onclick = openActivityLog;
+document.getElementById('notes-tags-btn').onclick = openNotesToTags;
+
+async function openNotesToTags(){
+  let r;
+  try{ r = await api('/tags/from-notes', {method:'POST', body: JSON.stringify({apply:false})}); }
+  catch(e){ if(e.status !== 401){ alert(errorMessage(e, 'Could not scan the notes.')); } return; }
+  const main = document.getElementById('main');
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  overlay.style.position='fixed'; overlay.style.inset='0'; overlay.style.zIndex='50'; overlay.style.borderRadius='0'; overlay.style.overflowY='auto';
+  const lines = Object.keys(r.perTag).sort((a,b)=>r.perTag[b]-r.perTag[a]).map(id=>'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--line);font-size:13.5px;"><span>'+escapeHtml(TAG_LABEL[id]||id)+'</span><strong>'+r.perTag[id]+'</strong></div>').join('');
+  overlay.innerHTML = '<div class="modal" style="max-width:520px;">'+
+    '<h3>Turn old notes into tags</h3>'+
+    '<p style="font-size:13.5px;color:var(--ink-soft);margin-top:-6px;">Older guests have allergies and diets typed into their notes, so the tag filter cannot find them. This reads each note and adds matching tags. Notes are never changed or deleted, and only missing tags are added.</p>'+
+    (r.added ? '<p style="font-size:14px;"><strong>'+r.guests+' guest'+(r.guests===1?'':'s')+'</strong> would get <strong>'+r.added+'</strong> new tag'+(r.added===1?'':'s')+':</p><div style="max-height:36vh;overflow-y:auto;">'+lines+'</div>'+
+      '<p style="font-size:12.5px;color:var(--ink-soft);">Allergy tags are only added when the note mentions an allergy or intolerance. Check a few guests afterwards.</p>'
+    : '<p style="font-size:14px;">Nothing to add. Every note that matches a tag already has it.</p>')+
+    '<div class="modal-actions"><button class="btn secondary" id="nt-close">'+(r.added?'Cancel':'Close')+'</button>'+(r.added?'<button class="btn gold" id="nt-apply">Add these tags</button>':'')+'</div></div>';
+  main.appendChild(overlay);
+  document.getElementById('nt-close').onclick = ()=> overlay.remove();
+  const ap = document.getElementById('nt-apply');
+  if(ap) ap.onclick = async ()=>{
+    ap.disabled = true;
+    try{ await api('/tags/from-notes', {method:'POST', body: JSON.stringify({apply:true})}); }
+    catch(e){ ap.disabled=false; if(e.status !== 401){ alert(errorMessage(e, 'Could not add the tags.')); } return; }
+    overlay.remove(); await loadGuests();
+  };
+}
+
+async function openActivityLog(){
+  let rows;
+  try{ rows = await api('/audit'); }
+  catch(e){ if(e.status !== 401){ alert(errorMessage(e, 'Could not load the activity log.')); } return; }
+  const main = document.getElementById('main');
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  overlay.style.position='fixed'; overlay.style.inset='0'; overlay.style.zIndex='50'; overlay.style.borderRadius='0'; overlay.style.overflowY='auto';
+  const body = rows.length ? rows.map(r=>{
+    const when = new Date(r.at).toLocaleString();
+    const who = escapeHtml(r.actor) + (r.role ? ' <span class="badge role-'+escapeHtml(r.role)+'">'+(r.role==='manager'?'Manager':'Floor staff')+'</span>' : '');
+    return '<div class="list-row" style="padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;">'+
+      '<div style="color:var(--ink-soft);font-size:12px;">'+escapeHtml(when)+'</div>'+
+      '<div><strong>'+who+'</strong> — '+escapeHtml(r.action)+'</div></div>';
+  }).join('') : '<p style="color:var(--ink-soft);">Nothing recorded yet.</p>';
+  overlay.innerHTML = '<div class="modal" style="max-width:640px;">'+
+    '<h2 style="margin-top:0;">Activity log</h2>'+
+    '<p style="font-size:13px;color:var(--ink-soft);margin-top:-6px;">The latest 200 sign-ins, guest deletions and staff changes.</p>'+
+    '<div style="max-height:55vh;overflow-y:auto;">'+body+'</div>'+
+    '<div class="modal-actions"><button class="btn secondary" id="al-close">Close</button></div></div>';
+  main.appendChild(overlay);
+  document.getElementById('al-close').onclick = ()=> overlay.remove();
+}
 
 async function openManageStaff(){
   let staffList;
@@ -426,6 +546,17 @@ function isStale(guest){
 function lastActivityLabel(guest){
   const last = lastActivityDate(guest);
   return last ? last.toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'}) : 'Unknown';
+}
+
+function daysSinceLastVisit(guest){
+  const ds = (guest.visits||[]).map(v=>v.date).filter(Boolean).sort();
+  if(!ds.length) return null;
+  const [y,m,d] = ds[ds.length-1].slice(0,10).split('-').map(Number);
+  const now = new Date(); now.setHours(0,0,0,0);
+  return Math.max(0, Math.round((now - new Date(y,m-1,d))/86400000));
+}
+function sinceLabel(n){
+  return n===null ? 'No visits yet' : n===0 ? 'Visited today' : n===1 ? 'Last visit yesterday' : 'Last visit '+n+' days ago';
 }
 
 function daysUntilNextOccasion(guest){
@@ -538,7 +669,7 @@ function render(){
   content.innerHTML = '';
   const searchRow = document.createElement('div'); searchRow.className='search-row';
   const input = document.createElement('input');
-  input.type='text'; input.placeholder='Search by name, phone, or notes (e.g. "vegetarian")';
+  input.type='text'; input.placeholder='Search by name, phone, notes or tag (e.g. "vegan")';
   input.value = window._lastQuery || '';
   input.oninput = ()=>{ window._lastQuery = input.value; window._shown = 50; renderList(); };
   searchRow.appendChild(input);
@@ -558,11 +689,19 @@ function render(){
   monthSelect.onchange = ()=>{ window._filterMonth = monthSelect.value; window._shown = 50; renderList(); };
   searchRow.appendChild(monthSelect);
 
+  const tagSelect = document.createElement('select');
+  tagSelect.style.maxWidth='170px';
+  tagSelect.innerHTML = '<option value="">Any tag</option>' + TAG_GROUPS.map(gr=>'<optgroup label="'+escapeHtml(gr.group)+'">'+gr.tags.map(tg=>'<option value="'+escapeHtml(tg.id)+'">'+escapeHtml(tg.label)+'</option>').join('')+'</optgroup>').join('');
+  tagSelect.value = window._filterTag || '';
+  tagSelect.onchange = ()=>{ window._filterTag = tagSelect.value; window._shown = 50; renderList(); };
+  searchRow.appendChild(tagSelect);
+
   content.appendChild(searchRow);
 
-  if(window._filterType || (window._filterMonth!==undefined && window._filterMonth!=='')){
+  if(window._filterType || window._filterTag || (window._filterMonth!==undefined && window._filterMonth!=='')){
     const monthsFull = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     const parts = [];
+    if(window._filterTag) parts.push(TAG_LABEL[window._filterTag] || 'tagged');
     if(window._filterType) parts.push(window._filterType);
     if(window._filterMonth!=='' && window._filterMonth!==undefined) parts.push('in ' + monthsFull[parseInt(window._filterMonth,10)]);
     const banner = document.createElement('div');
@@ -571,7 +710,7 @@ function render(){
     const clearBtn = document.createElement('button');
     clearBtn.className='btn gold small';
     clearBtn.textContent='Clear filter';
-    clearBtn.onclick = ()=>{ window._filterType=''; window._filterMonth=''; window._shown = 50; render(); };
+    clearBtn.onclick = ()=>{ window._filterType=''; window._filterMonth=''; window._filterTag=''; window._shown = 50; render(); };
     banner.appendChild(clearBtn);
     content.appendChild(banner);
   }
@@ -599,7 +738,8 @@ function renderList(){
   const listWrap = document.getElementById('list-wrap');
   if(!listWrap) return;
   let list = GUESTS;
-  if(q) list = list.filter(g=> g.name.toLowerCase().includes(q) || (g.phone||'').includes(q) || (g.notes||'').toLowerCase().includes(q));
+  if(q) list = list.filter(g=> g.name.toLowerCase().includes(q) || (g.phone||'').includes(q) || (g.notes||'').toLowerCase().includes(q) || (g.tags||[]).some(id=>(TAG_LABEL[id]||'').toLowerCase().includes(q)))
+  if(window._filterTag) list = list.filter(g=> (g.tags||[]).includes(window._filterTag));;
   list = list.filter(guestMatchesOccasionFilter);
   list = _.sortBy(list, g=> -( (g.visits && g.visits.length) ? new Date(_.maxBy(g.visits,'date').date).getTime() : 0));
   if(list.length===0){
@@ -633,6 +773,7 @@ function guestCard(g, occasionInfo){
   const left = document.createElement('div');
   left.innerHTML = '<p class="gcard-name">'+escapeHtml(g.name)+'</p><p class="gcard-meta">'+escapeHtml(g.phone||'No phone on file')+'</p>'+
     (g.notes ? '<p class="gcard-meta" style="font-style:italic;margin-top:2px;">'+escapeHtml(g.notes)+'</p>' : '');
+  if(g.tags && g.tags.length) left.appendChild(tagRow(g.tags));
   card.appendChild(left);
   const right = document.createElement('div');
   right.style.display='flex'; right.style.gap='8px'; right.style.alignItems='center';
@@ -641,6 +782,10 @@ function guestCard(g, occasionInfo){
     b.textContent = g.visits.length + ' visit' + (g.visits.length===1?'':'s');
     right.appendChild(b);
   }
+  { const n = daysSinceLastVisit(g);
+    const b = document.createElement('span'); b.className='badge since'+(n!==null&&n>=90?' long':'');
+    b.textContent = n===null ? 'No visits yet' : n===0 ? 'Visited today' : n+'d since last visit';
+    right.appendChild(b); }
   if(occasionInfo){
     const b = document.createElement('span'); b.className='badge occasion';
     b.textContent = occasionInfo.diff===0 ? occasionInfo.type+' today' : occasionInfo.type+' in '+occasionInfo.diff+'d';
@@ -660,7 +805,8 @@ function renderProfile(g){
 
   const head = document.createElement('div'); head.className='profile-head';
   head.innerHTML = '<div><h1 style="margin-bottom:4px;">'+escapeHtml(g.name)+'</h1>'+
-    '<p style="color:var(--ink-soft);font-size:14px;margin:0;">'+escapeHtml(g.phone||'No phone on file')+(g.email?' · '+escapeHtml(g.email):'')+'</p></div>';
+    '<p style="color:var(--ink-soft);font-size:14px;margin:0;">'+escapeHtml(g.phone||'No phone on file')+(g.email?' · '+escapeHtml(g.email):'')+'</p>'+
+    '<p style="color:var(--ink-soft);font-size:13.5px;margin:4px 0 0;font-weight:600;">'+sinceLabel(daysSinceLastVisit(g))+'</p></div>';
   const btnRow = document.createElement('div'); btnRow.style.cssText='display:flex;gap:8px;';
   const editBtn = document.createElement('button'); editBtn.className='btn secondary small'; editBtn.textContent='Edit details';
   editBtn.onclick = ()=> openEditGuest(g);
@@ -678,6 +824,17 @@ function renderProfile(g){
   head.appendChild(btnRow);
   wrap.appendChild(head);
 
+  if(g.tags && g.tags.length){
+    const tw = document.createElement('div'); tw.style.cssText='margin:0 0 12px;';
+    const allergies = sortedTags(g.tags).filter(id=>TAG_KIND[id]==='allergy').map(id=>TAG_LABEL[id]);
+    if(allergies.length){
+      const warn = document.createElement('p'); warn.style.cssText='margin:0 0 4px;font-size:14px;font-weight:700;color:var(--rust);';
+      warn.textContent = 'Allergies: ' + allergies.join(', ');
+      tw.appendChild(warn);
+    }
+    tw.appendChild(tagRow(g.tags));
+    wrap.appendChild(tw);
+  }
   if(g.notes){
     const notes = document.createElement('p'); notes.style.cssText='font-size:14px;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:10px 14px;';
     notes.textContent = g.notes;
@@ -757,19 +914,23 @@ function openNewGuest(){
   const main = document.getElementById('main');
   const overlay = document.createElement('div'); overlay.className='modal-overlay';
   overlay.style.position='fixed'; overlay.style.inset='0'; overlay.style.zIndex='50'; overlay.style.borderRadius='0'; overlay.style.overflowY='auto';
-  overlay.innerHTML = '<div class="modal">'+
+  overlay.innerHTML = '<div class="modal wide">'+
     '<h3>New guest</h3>'+
-    '<div class="field"><label>Name</label><input type="text" id="ng-name" placeholder="Full name"></div>'+
-    '<div class="field"><label>Phone number</label><input type="tel" id="ng-phone" placeholder="04xx xxx xxx" inputmode="numeric"></div>'+
-    '<div class="field"><label>Email (optional)</label><input type="text" id="ng-email" placeholder="name@example.com"></div>'+
-    '<div class="field"><label>Notes (optional)</label><input type="text" id="ng-notes" placeholder="Preferences, allergies, seating, etc."></div>'+
+    '<div class="grid2">'+
+        '<div class="field"><label>Name</label><input type="text" id="ng-name" placeholder="Full name"></div>'+
+        '<div class="field"><label>Phone number</label><input type="tel" id="ng-phone" placeholder="04xx xxx xxx" inputmode="numeric"></div>'+
+        '<div class="field"><label>Email (optional)</label><input type="text" id="ng-email" placeholder="name@example.com"></div>'+
+        '<div class="field"><label>Other notes (optional)</label><input type="text" id="ng-notes" placeholder="Anything not covered by the tags above"></div>'+
+    '</div>'+
+        '<div class="field"><label>Allergies, diet and seating (tap to select)</label><div id="ng-tags"></div></div>'+
     '<div id="ng-err" class="err hidden">Enter a name and a valid 10-digit phone number.</div>'+
-    '<div class="modal-actions">'+
+    '<div class="modal-actions sticky">'+
       '<button class="btn secondary" id="ng-cancel">Cancel</button>'+
       '<button class="btn gold" id="ng-save">Add guest</button>'+
     '</div>'+
   '</div>';
   main.appendChild(overlay);
+  const ngPicker = buildTagPicker([]); document.getElementById('ng-tags').appendChild(ngPicker.el);
   document.getElementById('ng-cancel').onclick = ()=> overlay.remove();
   document.getElementById('ng-save').onclick = async ()=>{
     const name = document.getElementById('ng-name').value.trim();
@@ -783,12 +944,14 @@ function openNewGuest(){
         name, phone,
         email: document.getElementById('ng-email').value.trim(),
         notes: document.getElementById('ng-notes').value.trim(),
+        tags: ngPicker.get(),
       })});
     }catch(e){ if(e.status===401){ return; } err.textContent=errorMessage(e, 'Could not save — check the details and try again.'); err.classList.remove('hidden'); return; }
     GUESTS.push(g);
     refreshStatus();
     window._filterType = '';
     window._filterMonth = '';
+    window._filterTag = '';
     overlay.remove();
     openGuest(g.id);
   };
@@ -797,19 +960,23 @@ function openEditGuest(g){
   const main = document.getElementById('main');
   const overlay = document.createElement('div'); overlay.className='modal-overlay';
   overlay.style.position='fixed'; overlay.style.inset='0'; overlay.style.zIndex='50'; overlay.style.borderRadius='0'; overlay.style.overflowY='auto';
-  overlay.innerHTML = '<div class="modal">'+
+  overlay.innerHTML = '<div class="modal wide">'+
     '<h3>Edit guest details</h3>'+
-    '<div class="field"><label>Name</label><input type="text" id="eg-name" value="'+escapeHtml(g.name)+'"></div>'+
-    '<div class="field"><label>Phone number</label><input type="tel" id="eg-phone" value="'+escapeHtml(g.phone||'')+'" inputmode="numeric"></div>'+
-    '<div class="field"><label>Email (optional)</label><input type="text" id="eg-email" value="'+escapeHtml(g.email||'')+'"></div>'+
-    '<div class="field"><label>Notes (optional)</label><input type="text" id="eg-notes" value="'+escapeHtml(g.notes||'')+'"></div>'+
+    '<div class="grid2">'+
+        '<div class="field"><label>Name</label><input type="text" id="eg-name" value="'+escapeHtml(g.name)+'"></div>'+
+        '<div class="field"><label>Phone number</label><input type="tel" id="eg-phone" value="'+escapeHtml(g.phone||'')+'" inputmode="numeric"></div>'+
+        '<div class="field"><label>Email (optional)</label><input type="text" id="eg-email" value="'+escapeHtml(g.email||'')+'"></div>'+
+        '<div class="field"><label>Other notes (optional)</label><input type="text" id="eg-notes" value="'+escapeHtml(g.notes||'')+'"></div>'+
+    '</div>'+
+        '<div class="field"><label>Allergies, diet and seating (tap to select)</label><div id="eg-tags"></div></div>'+
     '<div id="eg-err" class="err hidden">Enter a name and a valid 10-digit phone number.</div>'+
-    '<div class="modal-actions">'+
+    '<div class="modal-actions sticky">'+
       '<button class="btn secondary" id="eg-cancel">Cancel</button>'+
       '<button class="btn gold" id="eg-save">Save changes</button>'+
     '</div>'+
   '</div>';
   main.appendChild(overlay);
+  const egPicker = buildTagPicker(g.tags||[]); document.getElementById('eg-tags').appendChild(egPicker.el);
   document.getElementById('eg-cancel').onclick = ()=> overlay.remove();
   document.getElementById('eg-save').onclick = async ()=>{
     const name = document.getElementById('eg-name').value.trim();
@@ -823,6 +990,7 @@ function openEditGuest(g){
         name, phone,
         email: document.getElementById('eg-email').value.trim(),
         notes: document.getElementById('eg-notes').value.trim(),
+        tags: egPicker.get(),
       })});
     }catch(e){ if(e.status===401){ return; } err.textContent=errorMessage(e, 'Could not save — check the details and try again.'); err.classList.remove('hidden'); return; }
     Object.assign(g, updated, {visits: g.visits, occasions: g.occasions});

@@ -46,6 +46,20 @@ db.exec(`
     role TEXT NOT NULL DEFAULT 'staff'
   );
 
+  CREATE TABLE IF NOT EXISTS guest_tags (
+    guest_id TEXT NOT NULL REFERENCES guests(id) ON DELETE CASCADE,
+    tag      TEXT NOT NULL,
+    PRIMARY KEY (guest_id, tag)
+  );
+
+  CREATE TABLE IF NOT EXISTS audit_log (
+    id     INTEGER PRIMARY KEY AUTOINCREMENT,
+    at     TEXT NOT NULL,
+    actor  TEXT NOT NULL,
+    role   TEXT,
+    action TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS guests (
     id    TEXT PRIMARY KEY,
     name  TEXT NOT NULL,
@@ -127,6 +141,46 @@ function validDate(s) {
   return !isNaN(d) && d.toISOString().slice(0, 10) === s;
 }
 
+// ---- Tags: tap-to-select, fixed list, so nothing can be mistyped ----
+// To add or rename a tag, edit this list only (the app reads it from /api/tags).
+const TAG_GROUPS = [
+  { group: 'Allergies', kind: 'allergy', tags: [
+    ['allergy-peanut', 'Peanut'], ['allergy-tree-nut', 'Tree nut'], ['allergy-shellfish', 'Shellfish'],
+    ['allergy-fish', 'Fish'], ['allergy-egg', 'Egg'], ['allergy-dairy', 'Dairy'],
+    ['allergy-gluten', 'Gluten / coeliac'], ['allergy-soy', 'Soy'], ['allergy-sesame', 'Sesame'] ] },
+  { group: 'Diet', kind: 'diet', tags: [
+    ['diet-vegetarian', 'Vegetarian'], ['diet-vegan', 'Vegan'], ['diet-pescatarian', 'Pescatarian'],
+    ['diet-halal', 'Halal'], ['diet-kosher', 'Kosher'], ['diet-gluten-free', 'Gluten-free'], ['diet-dairy-free', 'Dairy-free'] ] },
+  { group: 'Seating and service', kind: 'service', tags: [
+    ['svc-quiet', 'Quiet table'], ['svc-window', 'Window seat'], ['svc-booth', 'Booth'],
+    ['svc-outdoor', 'Outdoor seating'], ['svc-high-chair', 'High chair'], ['svc-wheelchair', 'Wheelchair access'] ] },
+];
+const TAGS_FOR_API = TAG_GROUPS.map(g => ({ group: g.group, kind: g.kind, tags: g.tags.map(([id, label]) => ({ id, label })) }));
+const ALLOWED_TAGS = new Set(TAG_GROUPS.flatMap(g => g.tags.map(([id]) => id)));
+
+// Returns { value: null } when the request has no "tags" (leave them unchanged),
+// { value: [ids] } when valid, or { error } for anything not on the list.
+function parseTags(body) {
+  if (body.tags === undefined) return { value: null };
+  if (!Array.isArray(body.tags) || body.tags.length > 40) return { error: 'tags must be a list of known tags' };
+  const out = [];
+  for (const t of body.tags) {
+    if (typeof t !== 'string' || !ALLOWED_TAGS.has(t)) return { error: 'unknown tag' };
+    if (!out.includes(t)) out.push(t);
+  }
+  return { value: out };
+}
+
+function setTags(guestId, tags) {
+  db.exec('BEGIN');
+  try {
+    db.prepare('DELETE FROM guest_tags WHERE guest_id = ?').run(guestId);
+    const ins = db.prepare('INSERT INTO guest_tags (guest_id, tag) VALUES (?, ?)');
+    for (const t of tags) ins.run(guestId, t);
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+}
+
 function parseGuest(body) {
   const name = text(body.name);
   const phone = (typeof body.phone === 'string' ? body.phone : '').replace(/[\s-]/g, '');
@@ -136,7 +190,9 @@ function parseGuest(body) {
   if (!/^\d{10}$/.test(phone)) return { error: 'phone must be exactly 10 digits' };
   if (email && (email.length > 254 || !EMAIL_RE.test(email))) return { error: 'email is not valid' };
   if (notes.length > 1000) return { error: 'notes are too long (max 1000 characters)' };
-  return { value: { name, phone, email, notes } };
+  const tags = parseTags(body);
+  if (tags.error) return { error: tags.error };
+  return { value: { name, phone, email, notes, tags: tags.value } };
 }
 
 // ---- Sessions (in memory: a server restart signs everyone out) ----
@@ -238,8 +294,18 @@ function requireManager(req, res, next) {
 }
 
 // Plain-text record in the server window of who did what (manager-only actions).
+// Audit trail: printed in the server window AND saved in the database so it
+// survives restarts. Never put guest names or phone numbers in the message.
+function record(actor, role, message) {
+  const at = new Date().toISOString();
+  console.log(`[audit] ${at} ${actor}${role ? ' (' + role + ')' : ''}: ${message}`);
+  try {
+    db.prepare('INSERT INTO audit_log (at, actor, role, action) VALUES (?, ?, ?, ?)')
+      .run(at, actor, role || null, message);
+  } catch (e) { console.log('[audit] could not save to database:', e.message); }
+}
 const audit = (req, message) =>
-  console.log(`[audit] ${new Date().toISOString()} ${req.session ? req.session.name + ' (' + req.session.role + ')' : 'first-run setup'}: ${message}`);
+  req.session ? record(req.session.name, req.session.role, message) : record('first-run setup', null, message);
 
 // Names only: used to fill the login dropdown before anyone has signed in.
 app.get('/api/staff', (req, res) => {
@@ -254,6 +320,10 @@ app.get('/api/me', (req, res) => {
 // Full staff list with roles (managers only).
 app.get('/api/staff/all', requireManager, (req, res) => {
   res.json(db.prepare('SELECT id, name, role FROM staff ORDER BY rowid').all());
+});
+
+app.get('/api/audit', requireManager, (req, res) => {
+  res.json(db.prepare('SELECT id, at, actor, role, action FROM audit_log ORDER BY id DESC LIMIT 200').all());
 });
 
 app.post('/api/staff', (req, res) => {
@@ -301,11 +371,13 @@ app.post('/api/staff/login', (req, res) => {
     recordFailure(addressKey, MAX_FAILS_PER_ADDRESS);
     if (lockRemainingMs(accountKey) > 0 || lockRemainingMs(addressKey) > 0) {
       console.log(`[security] ${new Date().toISOString()} login locked for ${id || '(none)'} from ${ip}`);
+      record(staff ? staff.name : 'unknown account', staff ? staff.role : null, 'sign-in locked after too many wrong PINs');
     }
     return res.status(401).json({ error: 'incorrect PIN' });
   }
 
   failures.delete(accountKey);
+  record(staff.name, staff.role, 'signed in');
   res.json({ id: staff.id, name: staff.name, role: staff.role, token: createSession(staff) });
 });
 
@@ -342,25 +414,105 @@ app.delete('/api/staff/:id', requireManager, (req, res) => {
 });
 
 // ---- Guest endpoints ----
-function guestWithChildren(guestRow) {
+function guestWithChildren(guestRow, tagsPre) {
   const visits = db.prepare('SELECT id, date, note, logged_by AS loggedBy FROM visits WHERE guest_id = ? ORDER BY date DESC').all(guestRow.id);
   const occasions = db.prepare('SELECT id, type, date FROM occasions WHERE guest_id = ?').all(guestRow.id);
-  return { ...guestRow, visits, occasions };
+  const tags = tagsPre || db.prepare('SELECT tag FROM guest_tags WHERE guest_id = ? ORDER BY tag').all(guestRow.id).map(r => r.tag);
+  return { ...guestRow, visits, occasions, tags };
 }
+
+
+// ---- Suggest tags from existing free-text notes (one-off conversion, manager only) ----
+// Allergy tags are only suggested when the note also mentions an allergy/intolerance,
+// so "likes peanut sauce" is not treated as an allergy. Words are matched loosely.
+const ALLERGY_CONTEXT = /allerg|intoleran|anaphyla|epipen|coeliac|celiac|cannot eat|can't eat|\bno\s/i;
+const NOTE_RULES = [
+  ['allergy-peanut', /peanut|groundnut|\bnuts?\s+allerg|nut\s+allerg|allerg\w*\s+(to\s+)?nuts?\b/i, true],
+  ['allergy-tree-nut', /tree\s*nut|almond|cashew|walnut|hazelnut|pistachio|pecan|\bnuts?\s+allerg|nut\s+allerg|allerg\w*\s+(to\s+)?nuts?\b/i, true],
+  ['allergy-shellfish', /shellfish|prawn|shrimp|crab|lobster|crustacean/i, true],
+  ['allergy-fish', /\bfish\b(?!\s*free)/i, true],
+  ['allergy-egg', /\beggs?\b/i, true],
+  ['allergy-dairy', /dairy|lactose|\bmilk\b/i, true],
+  ['allergy-gluten', /gluten|coeliac|celiac|\bwheat\b/i, true],
+  ['allergy-soy', /\bsoy\w*/i, true],
+  ['allergy-sesame', /sesame/i, true],
+  ['diet-vegetarian', /vegetarian|veggie/i, false],
+  ['diet-vegan', /\bvegan/i, false],
+  ['diet-pescatarian', /pescatarian|pescetarian/i, false],
+  ['diet-halal', /\bhalal/i, false],
+  ['diet-kosher', /\bkosher/i, false],
+  ['diet-gluten-free', /gluten[\s-]*free/i, false],
+  ['diet-dairy-free', /dairy[\s-]*free|lactose[\s-]*free/i, false],
+  ['svc-quiet', /\bquiet/i, false],
+  ['svc-window', /\bwindow/i, false],
+  ['svc-booth', /\bbooth/i, false],
+  ['svc-outdoor', /outdoor|outside|\bpatio|\bterrace/i, false],
+  ['svc-high-chair', /high\s*chair|highchair|booster/i, false],
+  ['svc-wheelchair', /wheel\s*chair|wheelchair/i, false],
+];
+function suggestTagsFromNotes(notes) {
+  const n = String(notes || '');
+  if (!n) return [];
+  const hasCtx = ALLERGY_CONTEXT.test(n);
+  const out = [];
+  for (const [tag, re, needsCtx] of NOTE_RULES) {
+    if (!ALLOWED_TAGS.has(tag)) continue;
+    if (needsCtx && !hasCtx) continue;
+    if (re.test(n)) out.push(tag);
+  }
+  // "gluten free" / "dairy free" are diets, not allergies, unless an allergy is also stated
+  if (/gluten[\s-]*free/i.test(n) && !/allerg|coeliac|celiac|intoleran/i.test(n)) { const i = out.indexOf('allergy-gluten'); if (i >= 0) out.splice(i, 1); }
+  if (/(dairy|lactose)[\s-]*free/i.test(n) && !/allerg|intoleran/i.test(n)) { const i = out.indexOf('allergy-dairy'); if (i >= 0) out.splice(i, 1); }
+  return out;
+}
+
+// POST /api/tags/from-notes  { apply: false } = preview only, { apply: true } = save the tags.
+// Only ADDS tags; existing tags and the notes themselves are never changed.
+app.post('/api/tags/from-notes', requireManager, (req, res) => {
+  const apply = !!(req.body && req.body.apply === true);
+  const rows = db.prepare('SELECT id, notes FROM guests').all();
+  const existing = db.prepare('SELECT guest_id, tag FROM guest_tags').all();
+  const have = new Set(existing.map(r => r.guest_id + '|' + r.tag));
+  const perTag = {};
+  let guests = 0, added = 0;
+  const ins = db.prepare('INSERT OR IGNORE INTO guest_tags (guest_id, tag) VALUES (?, ?)');
+  db.exec('BEGIN');
+  try {
+    for (const g of rows) {
+      const fresh = suggestTagsFromNotes(g.notes).filter(t => !have.has(g.id + '|' + t));
+      if (!fresh.length) continue;
+      guests++;
+      for (const t of fresh) { perTag[t] = (perTag[t] || 0) + 1; added++; if (apply) ins.run(g.id, t); }
+    }
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); return res.status(500).json({ error: 'could not add tags' }); }
+  if (apply) audit(req, `added ${added} tags to ${guests} guests from their notes`);
+  res.json({ applied: apply, guests, added, perTag });
+});
+
+app.get('/api/tags', (req, res) => {
+  res.json(TAGS_FOR_API);
+});
 
 app.get('/api/guests', (req, res) => {
   const rows = db.prepare('SELECT * FROM guests').all();
-  res.json(rows.map(guestWithChildren));
+  const tagMap = new Map();
+  for (const r of db.prepare('SELECT guest_id, tag FROM guest_tags ORDER BY tag').all()) {
+    if (!tagMap.has(r.guest_id)) tagMap.set(r.guest_id, []);
+    tagMap.get(r.guest_id).push(r.tag);
+  }
+  res.json(rows.map(g => guestWithChildren(g, tagMap.get(g.id) || [])));
 });
 
 app.post('/api/guests', (req, res) => {
   const parsed = parseGuest(bodyOf(req));
   if (parsed.error) return res.status(400).json({ error: parsed.error });
-  const { name, phone, email, notes } = parsed.value;
+  const { name, phone, email, notes, tags } = parsed.value;
   const id = uid('g');
   const created_at = new Date().toISOString();
   db.prepare('INSERT INTO guests (id, name, phone, email, notes, created_at) VALUES (?, ?, ?, ?, ?, ?)')
     .run(id, name, phone, email, notes, created_at);
+  if (tags && tags.length) setTags(id, tags);
   res.status(201).json(guestWithChildren({ id, name, phone, email, notes, created_at }));
 });
 
@@ -370,9 +522,10 @@ app.put('/api/guests/:id', (req, res) => {
   if (!existing) return res.status(404).json({ error: 'guest not found' });
   const parsed = parseGuest(bodyOf(req));
   if (parsed.error) return res.status(400).json({ error: parsed.error });
-  const { name, phone, email, notes } = parsed.value;
+  const { name, phone, email, notes, tags } = parsed.value;
   db.prepare('UPDATE guests SET name = ?, phone = ?, email = ?, notes = ? WHERE id = ?')
     .run(name, phone, email, notes, req.params.id);
+  if (tags !== null) setTags(req.params.id, tags); // no "tags" in the request = leave them as they are
   res.json(guestWithChildren({ ...existing, name, phone, email, notes }));
 });
 
@@ -380,7 +533,7 @@ app.delete('/api/guests/:id', requireManager, (req, res) => {
   if (!ID_RE.test(req.params.id)) return res.status(400).json({ error: 'invalid id' });
   const guest = db.prepare('SELECT name FROM guests WHERE id = ?').get(req.params.id);
   db.prepare('DELETE FROM guests WHERE id = ?').run(req.params.id);
-  if (guest) audit(req, `deleted guest ${req.params.id} ("${guest.name}")`);
+  if (guest) audit(req, `deleted guest ${req.params.id}`);
   res.status(204).end();
 });
 
@@ -427,21 +580,55 @@ app.use((err, req, res, next) => {
   res.status(status).json({ error: status === 500 ? 'server error' : 'bad request' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Guest Book server running on port ${PORT}`);
-  console.log(`On this computer: http://localhost:${PORT}`);
-  console.log('From phones/tablets on the same Wi-Fi, type ONE of these (start with http://):');
+// ---- Optional HTTPS --------------------------------------------------------
+// If a certificate and key are provided, the server speaks HTTPS. Provide them
+// either with the TLS_CERT and TLS_KEY environment variables, or by placing
+// certs/cert.pem and certs/key.pem in the project folder. With neither, it runs
+// as plain HTTP (fine for first tests, not for real use).
+// If you provide only one of the two, or a file cannot be read, the server stops
+// with a clear message instead of quietly falling back to HTTP.
+const fs = require('fs');
+function loadTls() {
+  const certPath = process.env.TLS_CERT || path.join(__dirname, 'certs', 'cert.pem');
+  const keyPath  = process.env.TLS_KEY  || path.join(__dirname, 'certs', 'key.pem');
+  const explicit = !!(process.env.TLS_CERT || process.env.TLS_KEY);
+  const haveCert = fs.existsSync(certPath), haveKey = fs.existsSync(keyPath);
+  if (!explicit && !haveCert && !haveKey) return null;
+  if (!haveCert || !haveKey) {
+    console.error('HTTPS setup is incomplete. Need BOTH files:');
+    console.error('  certificate: ' + certPath + (haveCert ? '' : '   <-- missing'));
+    console.error('  key:         ' + keyPath + (haveKey ? '' : '   <-- missing'));
+    process.exit(1);
+  }
+  try {
+    return { cert: fs.readFileSync(certPath), key: fs.readFileSync(keyPath) };
+  } catch (e) {
+    console.error('Could not read the HTTPS files: ' + e.message);
+    process.exit(1);
+  }
+}
+const tlsOptions = loadTls();
+const SCHEME = tlsOptions ? 'https' : 'http';
+
+const onListening = () => {
+  console.log(`Guest Book server running on port ${PORT} (${tlsOptions ? 'HTTPS' : 'plain HTTP - not encrypted'})`);
+  console.log(`On this computer: ${SCHEME}://localhost:${PORT}`);
+  console.log(`From phones/tablets on the same Wi-Fi, type ONE of these (start with ${SCHEME}://):`);
   const nets = require('os').networkInterfaces();
   let found = false;
   for (const [name, list] of Object.entries(nets)) {
     for (const n of list || []) {
       if (n.family === 'IPv4' && !n.internal) {
-        console.log(`  http://${n.address}:${PORT}    (adapter: ${name})`);
+        console.log(`  ${SCHEME}://${n.address}:${PORT}    (adapter: ${name})`);
         found = true;
       }
     }
   }
   if (!found) console.log('  No network connection found - connect this computer to Wi-Fi first.');
   console.log('Use the one for your Wi-Fi adapter, not virtual ones (WSL, VirtualBox, Hyper-V, VPN).');
+  if (!tlsOptions) console.log('WARNING: PINs and guest data are NOT encrypted on the network. See README, "HTTPS".');
   if (staffCount() === 0) console.log('No staff accounts yet: open the app and create the first account now.');
-});
+};
+
+if (tlsOptions) require('https').createServer(tlsOptions, app).listen(PORT, '0.0.0.0', onListening);
+else app.listen(PORT, '0.0.0.0', onListening);
