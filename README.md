@@ -138,6 +138,29 @@ every request, so a promotion, demotion or removal takes effect immediately.
 It will not let you remove yourself, remove the last manager, or demote the
 last manager, so the system can't be locked out. 
 
+### Browsing the guest list (less scrolling)
+
+- The guest list is compact: one row per guest with name, phone, up to three
+  tags (an allergy is never hidden) and the latest note on one line.
+- The list shows **10 guests per page** with Previous / Next buttons at the top
+  and bottom, instead of one very long page.
+- The search and filter bar stays at the top while scrolling.
+- The left menu stays in place. The manager tools (Manage staff, Manage tags,
+  Notes -> tags, Activity log, Backups) are folded into one **Manager tools**
+  button that opens and closes.
+- On a guest profile, **Log visit** is at the top, and the visit history shows the
+  latest 5 visits with a "Show all" button.
+
+### Search suggestions
+
+As staff type in the search box, a list of suggestions appears under it: matching
+**guest names**, **phone numbers** (when digits are typed), **tags** (for example
+"Peanut", "Vegan") and **words used in notes** with how many guests use them.
+Tap a suggestion, or use the arrow keys and Enter, to fill the search box. Press
+Esc to close the list. Suggestions are built in the browser from the guest list
+already on screen, so nothing extra is stored or sent. Because they show real
+names and numbers, they are visible only to signed-in staff.
+
 ### Days since last visit
 
 Each guest card shows how many days it has been since their most recent logged
@@ -165,9 +188,13 @@ changed, only missing tags are added, and the action is written to the activity
 log. Spot-check a few guests afterwards, because it matches keywords and cannot
 read context perfectly.
 
-The tag list is fixed on the server. To add or rename a tag, edit `TAG_GROUPS`
-near the top of `server.js` and restart; the tablets pick up the new list
-automatically. Existing guests keep their old notes, and no tags are added to
+**Adding your own tags:** a manager opens **Manage tags** in the left menu, picks a
+group (Allergies, Diet or Seating and service), types a name and taps **Add tag**.
+It appears straight away on every tablet. Custom tags can be renamed or removed
+(removing asks for confirmation and takes the tag off the guests who have it).
+Built-in tags cannot be changed. Floor staff can use tags but not edit the list,
+duplicate names are refused, and each change is written to the activity log.
+Developers can still change the built-in list in `TAG_GROUPS` in `server.js`. Existing guests keep their old notes, and no tags are added to
 them automatically. Unknown tags are rejected by the server.
 
 **Privacy:** allergy and dietary tags (especially medical allergies and
@@ -184,11 +211,115 @@ lines. They survive a server restart. Managers can read the latest 200 entries
 under **Activity log** in the left menu; floor staff cannot see it. Entries
 record who did what and when, but never guest names or phone numbers (a
 deleted guest is recorded by ID only), so deleting a guest really removes their
-details. Entries are not edited or deleted by the app, and the log is not yet
-trimmed automatically.
+details. Entries are never edited by the app.
+
+**Automatic trimming.** Once a day (and when the server starts), entries older
+than 365 days are removed from the database so the log does not grow forever.
+Before they are removed they are appended to `audit-archive.csv` in the backups
+folder, and the trim itself is recorded in the log ("Activity log trimmed: N
+entries ... moved to audit-archive.csv"). Set `AUDIT_KEEP_DAYS` (minimum 30) to
+keep a different number of days. Managers can press **Download CSV** in the
+Activity log screen to save the whole current log. The archive file contains
+staff names and actions, so keep it private like the backups (it is excluded
+from GitHub).
 
 **Housekeeping:** delete `guests.csv` from the project folder once the import
 is done, because it holds real customer data.
+
+## Starting automatically (Windows)
+
+On a real deployment the server computer will be switched off and on, and nobody
+should have to open a terminal and type `npm start`. These scripts register the
+server with Windows Task Scheduler so it **starts when the computer starts, before
+anyone signs in**, and is **restarted every minute if it stops**. Nothing extra is
+installed.
+
+**Set it up (once).**
+
+1. Install Node.js **for all users** (the normal installer from nodejs.org does
+   this) and run `npm install` in the project folder.
+2. Close any window that is already running the server.
+3. Open PowerShell **as administrator** (right-click, Run as administrator), go to
+   the project folder, and run:
+
+   ```
+   powershell -ExecutionPolicy Bypass -File scripts\install-autostart.ps1 -OpenFirewall -NoSleep
+   ```
+
+   `-OpenFirewall` lets tablets on a private Wi-Fi network reach the server, and
+   `-NoSleep` stops the computer sleeping while plugged in. Both are optional;
+   leave them out to do those steps yourself. Use `-Port 8080` for a different port.
+4. Restart the computer once, wait a minute, and open the address from a tablet.
+   If the guest list loads, it works.
+
+**Day to day.** The server's output (including the activity messages) is saved in
+`logs\server.log`. If something is wrong, look at the end of that file first.
+In PowerShell (as administrator):
+
+| To do this | Run |
+|---|---|
+| See whether it is running | `Get-ScheduledTask GuestBookServer` |
+| Stop it | `Stop-ScheduledTask GuestBookServer` |
+| Start it | `Start-ScheduledTask GuestBookServer` |
+| Remove auto-start | `powershell -ExecutionPolicy Bypass -File scripts\uninstall-autostart.ps1` |
+
+**After changing the code** (for example a new `server.js`), stop and start the
+task so it picks up the change. **Do not also run `npm start`** in a window while
+the task is running: both would try to use the same port.
+
+**Good to know.**
+
+- The task runs as the Windows SYSTEM account, so files it creates (the log, new
+  backups) may need administrator rights to delete. Your data and backups are not
+  moved or changed.
+- `logs\server.log` keeps growing. Delete or archive it now and then (stop the
+  task first).
+- If the server cannot start (for example the port is already in use), Windows
+  keeps retrying every minute, and the reason is written to `logs\server.log`.
+- Sessions are held in memory, so a restart signs everyone out. Staff sign in again.
+- On a Mac or Linux server use the system's own service manager (launchd or
+  systemd), or PM2 (`npm i -g pm2`, `pm2 start server.js`, `pm2 startup`).
+
+## Backups and restore
+
+The server saves a complete backup of the database **automatically every 24 hours**
+(it checks when it starts and then once an hour) into the `backups` folder next to
+`server.js`. It keeps the newest 14 copies and deletes older ones. Backups are made
+with SQLite's own `VACUUM INTO`, so they are consistent even while staff are using
+the app. Each backup is opened and checked before it is trusted.
+
+**What a backup contains.** All guest records, visit history, tags, staff accounts
+(PIN hashes only) and the activity log. That is personal information, so the
+`backups` folder is excluded from GitHub (`.gitignore`) and must be kept private.
+
+**Settings (optional environment variables).**
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `BACKUP_DIR` | `backups` in the project folder | Where backups are saved. Point it at a second drive or a synced folder. |
+| `BACKUP_KEEP` | `14` | How many of the newest backups to keep. |
+| `AUDIT_KEEP_DAYS` | `365` | Days of activity log kept in the database before older entries are archived to CSV (minimum 30). |
+
+**In the app (managers only).** Press **Backups** in the sidebar to see the list,
+press **Back up now** for an extra copy before a risky change, or **Download** to
+save a copy to the computer you are using. Each manual backup and download is
+written to the activity log.
+
+**A backup on the same computer is not enough.** If that computer fails, the
+backups go with it. At least once a week, copy the newest file in `backups` to a
+USB drive or a private cloud folder (or set `BACKUP_DIR` to one).
+
+**Restoring.**
+
+1. Stop the server (close its window or press Ctrl+C).
+2. Run `node scripts/restore-backup.js backups/<file>.db`
+   (for example `backups/guestbook-2026-11-16-020000.db`).
+3. Start the server again with `node server.js`.
+
+The script checks the file is a real Guest Book backup, keeps the current database
+as `guestbook.before-restore-<time>.db` (so a restore can be undone) and prints the
+guest and staff counts it restored. Practise a restore once, on a copy, before you
+need it.
 
 ## HTTPS (encrypting the connection)
 
@@ -305,17 +436,18 @@ Australian Privacy Principles guidelines for the full requirements.
 - HTTPS is supported but optional. Until a certificate is installed (see
   "HTTPS"), PINs, session tokens and guest data cross the Wi-Fi unencrypted.
   Fine only on a trusted, password-protected staff Wi-Fi.
-- Tags are a fixed list set by the developer; managers cannot yet add tags
-  from inside the app. Old free-text notes are not converted to tags.
+- Old free-text notes are not converted to tags automatically; a manager uses
+  Notes → tags once. Built-in tags are fixed (only custom tags can be edited).
 - Sessions and lockout counters are held in memory, so a server restart
   signs everyone out and resets lockouts.
 - Roles are a simple two-level split (manager / floor staff). The activity
   log records sign-ins, deletions and staff changes, but not every time a guest
-  record is viewed or edited, and it is not yet trimmed automatically or
-  protected against someone with direct access to the database file.
-- There's a single server instance with no automatic backups — a real
-  deployment would want scheduled database backups and a plan for what
-  happens if the server machine goes down mid-service.
+  record is viewed or edited, and it is not protected against someone with direct access to the database file.
+- There's a single server instance. Backups are automatic (daily) but are saved
+  on the same computer unless `BACKUP_DIR` points elsewhere, and copying them
+  off the machine is a manual step. A real deployment would want an
+  off-site copy and a plan for what happens if the server machine goes down
+  mid-service.
 - No offline mode: if the server or Wi-Fi drops, tablets briefly can't
   read or write guest data until it's back.
 - The "Data retention" review is manual (staff choose what to remove) —

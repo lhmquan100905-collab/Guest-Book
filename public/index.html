@@ -26,8 +26,8 @@
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;}
-  .app{display:flex;min-height:640px;max-width:1180px;margin:0 auto;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--panel);}
-  .rail{width:210px;flex-shrink:0;background:var(--brand);color:#f4efe6;display:flex;flex-direction:column;padding:24px 16px;}
+  .app{display:flex;height:100vh;height:100dvh;min-height:0;max-width:1180px;margin:0 auto;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--panel);}
+  .rail{width:210px;flex-shrink:0;overflow-y:auto;background:var(--brand);color:#f4efe6;display:flex;flex-direction:column;padding:24px 16px;}
   .rail-brand{font-family:'Fraunces',serif;font-size:20px;font-weight:600;letter-spacing:.2px;margin:0 0 2px 6px;}
   .rail-sub{font-size:12px;color:#c7d3cb;margin:0 0 28px 6px;}
   .rail-btn{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:8px;background:transparent;border:none;color:#e8e2d6;font-family:'Inter',sans-serif;font-size:14px;font-weight:500;text-align:left;cursor:pointer;margin-bottom:4px;}
@@ -47,6 +47,17 @@
   }
   input:focus, textarea:focus, select:focus{outline:2px solid var(--gold);outline-offset:1px;border-color:var(--gold);}
   .search-row input{flex:1;}
+  .search-box{position:relative;flex:1;min-width:220px;}
+  .search-box input{width:100%;}
+  .suggest{position:absolute;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);z-index:30;overflow:hidden;max-height:60vh;overflow-y:auto;}
+  .suggest[hidden]{display:none;}
+  .sg-item{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--line);}
+  .sg-item:last-child{border-bottom:none;}
+  .sg-item.active,.sg-item:hover{background:var(--gold-soft);}
+  .sg-main{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sg-main mark{background:none;color:inherit;font-weight:700;}
+  .sg-sub{color:var(--ink-soft);font-size:12px;margin-left:8px;}
+  .sg-kind{flex:none;font-size:11px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
   .btn{font-family:'Inter',sans-serif;font-size:14px;font-weight:600;border-radius:8px;padding:10px 18px;border:1px solid var(--brand);background:var(--brand);color:#fff;cursor:pointer;white-space:nowrap;}
   .btn:hover{background:var(--brand-light);}
   .btn.secondary{background:#fff;color:var(--brand);border:1px solid var(--line);}
@@ -55,6 +66,28 @@
   .btn.gold{background:var(--gold);border-color:var(--gold);}
   .btn.gold:hover{background:#88611f;}
   .cards{display:flex;flex-direction:column;gap:10px;}
+  .gcard{padding:9px 14px;gap:12px;}
+  .gcard-main{min-width:0;flex:1;}
+  .gcard-line{display:flex;align-items:baseline;gap:10px;min-width:0;}
+  .gcard-name{margin:0;white-space:nowrap;}
+  .gcard-line .gcard-meta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .gcard-sub{display:flex;align-items:center;gap:8px;margin-top:4px;min-width:0;overflow:hidden;}
+  .gcard-sub .gcard-meta{font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;}
+  .gcard-sub .tagrow{margin-top:0;flex-wrap:nowrap;flex:none;}
+  .gcard-sub .tag{padding:2px 8px;font-size:11px;}
+  .cards{gap:6px;}
+  .search-row{position:sticky;top:-28px;z-index:20;background:#fff;margin:-10px 0 12px;padding:12px 0 10px;border-bottom:1px solid var(--line);}
+  .pager{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;font-size:13px;color:var(--ink-soft);}
+  .pager.bottom{margin:12px 0 4px;justify-content:center;}
+  .pager .pg-btns{display:flex;align-items:center;gap:8px;}
+  .pager .btn{padding:7px 14px;font-size:13px;}
+  .pager .btn[disabled]{opacity:.4;cursor:default;}
+  .rail-group{margin:6px 0;}
+  .rail-toggle{display:flex;justify-content:space-between;align-items:center;width:100%;}
+  .rail-toggle .chev{font-size:11px;opacity:.7;}
+  .rail-tools{border-left:2px solid var(--brand-light);margin:2px 0 4px 10px;padding-left:4px;}
+  .rail-tools .rail-btn{padding:8px 10px;font-size:13.5px;}
+  .more-visits{background:none;border:none;color:var(--gold);font-weight:600;font-size:13.5px;cursor:pointer;padding:8px 0 0;font-family:inherit;}
   .gcard{border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;background:#fff;}
   .gcard:hover{border-color:var(--gold);}
   .gcard-name{font-weight:600;font-size:15px;margin:0 0 3px;}
@@ -159,9 +192,16 @@
     <button class="rail-btn" id="nav-new" onclick="openNewGuest()">+ New guest</button>
     <div class="rail-spacer"></div>
     <p class="rail-foot" id="signed-in-as"></p>
-    <button class="rail-btn" id="manage-staff-btn">Manage staff</button>
-    <button class="rail-btn" id="notes-tags-btn">Notes → tags</button>
-    <button class="rail-btn" id="activity-btn">Activity log</button>
+    <div class="rail-group" id="mgr-group">
+      <button class="rail-btn rail-toggle" id="mgr-toggle" aria-expanded="false"><span>Manager tools</span><span class="chev" id="mgr-chev">▸</span></button>
+      <div class="rail-tools hidden" id="mgr-tools">
+        <button class="rail-btn" id="manage-staff-btn">Manage staff</button>
+        <button class="rail-btn" id="manage-tags-btn">Manage tags</button>
+        <button class="rail-btn" id="notes-tags-btn">Notes → tags</button>
+        <button class="rail-btn" id="activity-btn">Activity log</button>
+        <button class="rail-btn" id="backups-btn">Backups</button>
+      </div>
+    </div>
     <button class="rail-btn logout" id="logout-btn">Sign out</button>
     <p class="rail-foot" id="rail-status">Loading guest records…</p>
   </div>
@@ -265,9 +305,12 @@ function applyRole(){
   const manager = s.role === 'manager';
   document.getElementById('signed-in-as').textContent = 'Signed in as ' + (s.name || '') + ' (' + (manager ? 'Manager' : 'Floor staff') + ')';
   document.getElementById('nav-retention').classList.toggle('hidden', !manager);
+  document.getElementById('mgr-group').classList.toggle('hidden', !manager);
   document.getElementById('manage-staff-btn').classList.toggle('hidden', !manager);
   document.getElementById('activity-btn').classList.toggle('hidden', !manager);
+  document.getElementById('backups-btn').classList.toggle('hidden', !manager);
   document.getElementById('notes-tags-btn').classList.toggle('hidden', !manager);
+  document.getElementById('manage-tags-btn').classList.toggle('hidden', !manager);
   if(!manager && VIEW === 'retention'){ setView('search'); }
 }
 
@@ -405,7 +448,73 @@ document.getElementById('logout-btn').onclick = ()=> signOut(null);
 
 document.getElementById('manage-staff-btn').onclick = openManageStaff;
 document.getElementById('activity-btn').onclick = openActivityLog;
+document.getElementById('mgr-toggle').onclick = ()=>{
+  const tools = document.getElementById('mgr-tools');
+  const open = tools.classList.toggle('hidden') === false;
+  document.getElementById('mgr-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+  document.getElementById('mgr-chev').textContent = open ? '▾' : '▸';
+};
+document.getElementById('backups-btn').onclick = openBackups;
 document.getElementById('notes-tags-btn').onclick = openNotesToTags;
+document.getElementById('manage-tags-btn').onclick = openManageTags;
+
+async function openManageTags(){
+  const main = document.getElementById('main');
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  overlay.style.position='fixed'; overlay.style.inset='0'; overlay.style.zIndex='50'; overlay.style.borderRadius='0'; overlay.style.overflowY='auto';
+  overlay.innerHTML = '<div class="modal wide"><h3>Manage tags</h3><div id="mt-body"></div><div class="modal-actions"><button class="btn secondary" id="mt-close">Close</button></div></div>';
+  main.appendChild(overlay);
+  document.getElementById('mt-close').onclick = async ()=>{ overlay.remove(); await loadTags(); await loadGuests(); };
+  const body = overlay.querySelector('#mt-body');
+  const fail = e => { if(e.status !== 401){ alert(errorMessage(e, 'Could not update the tags.')); } };
+  async function draw(){
+    let groups, usage;
+    try{ groups = await api('/tags'); usage = await api('/tags/usage'); }catch(e){ fail(e); return; }
+    body.innerHTML = '';
+    const intro = document.createElement('p'); intro.style.cssText='font-size:13.5px;color:var(--ink-soft);margin-top:-6px;';
+    intro.textContent = 'Add your own tags for allergies, diets or seating. Staff will see them straight away when adding or editing a guest. Built-in tags cannot be changed.';
+    body.appendChild(intro);
+    const form = document.createElement('div'); form.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;';
+    const sel = document.createElement('select'); sel.id='mt-kind';
+    groups.forEach(g=>{ const o=document.createElement('option'); o.value=g.kind; o.textContent=g.group; sel.appendChild(o); });
+    const inp = document.createElement('input'); inp.id='mt-label'; inp.type='text'; inp.maxLength=30; inp.placeholder='New tag name, e.g. Mustard'; inp.style.flex='1 1 180px';
+    const add = document.createElement('button'); add.className='btn gold'; add.id='mt-add'; add.type='button'; add.textContent='Add tag';
+    form.append(sel, inp, add); body.appendChild(form);
+    const doAdd = async ()=>{
+      if(!inp.value.trim()) return; add.disabled=true;
+      try{ await api('/tags', {method:'POST', body: JSON.stringify({kind: sel.value, label: inp.value})}); await draw(); }
+      catch(e){ add.disabled=false; fail(e); }
+    };
+    add.onclick = doAdd; inp.onkeydown = ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); doAdd(); } };
+    groups.forEach(g=>{
+      const box = document.createElement('div'); box.className='tgroup '+g.kind; box.style.marginBottom='10px';
+      const h = document.createElement('h4'); h.textContent = g.group; box.appendChild(h);
+      const built = g.tags.filter(t=>!t.custom);
+      const bl = document.createElement('div'); bl.style.cssText='font-size:12.5px;color:var(--ink-soft);margin-bottom:6px;';
+      bl.textContent = 'Built-in: ' + built.map(t=>t.label).join(', '); box.appendChild(bl);
+      const custom = g.tags.filter(t=>t.custom);
+      if(!custom.length){ const n=document.createElement('div'); n.style.cssText='font-size:13px;color:var(--ink-soft);'; n.textContent='No custom tags yet.'; box.appendChild(n); }
+      custom.forEach(t=>{
+        const row = document.createElement('div'); row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line);flex-wrap:wrap;';
+        const nm = document.createElement('span'); nm.style.cssText='flex:1 1 140px;font-weight:600;'; nm.textContent = t.label;
+        const cnt = document.createElement('span'); cnt.style.cssText='font-size:12.5px;color:var(--ink-soft);'; const u = usage[t.id]||0; cnt.textContent = u+' guest'+(u===1?'':'s');
+        const rn = document.createElement('button'); rn.className='btn secondary'; rn.type='button'; rn.textContent='Rename';
+        const rm = document.createElement('button'); rm.className='btn secondary'; rm.type='button'; rm.textContent='Remove';
+        rn.onclick = async ()=>{
+          const v = prompt('New name for "'+t.label+'":', t.label); if(v===null) return;
+          try{ await api('/tags/'+encodeURIComponent(t.id), {method:'PUT', body: JSON.stringify({label:v})}); await draw(); }catch(e){ fail(e); }
+        };
+        rm.onclick = async ()=>{
+          if(!confirm('Remove the tag "'+t.label+'"'+(u? ' from '+u+' guest'+(u===1?'':'s') : '')+'? This cannot be undone.')) return;
+          try{ await api('/tags/'+encodeURIComponent(t.id), {method:'DELETE'}); await draw(); }catch(e){ fail(e); }
+        };
+        row.append(nm, cnt, rn, rm); box.appendChild(row);
+      });
+      body.appendChild(box);
+    });
+  }
+  await draw();
+}
 
 async function openNotesToTags(){
   let r;
@@ -449,11 +558,70 @@ async function openActivityLog(){
   }).join('') : '<p style="color:var(--ink-soft);">Nothing recorded yet.</p>';
   overlay.innerHTML = '<div class="modal" style="max-width:640px;">'+
     '<h2 style="margin-top:0;">Activity log</h2>'+
-    '<p style="font-size:13px;color:var(--ink-soft);margin-top:-6px;">The latest 200 sign-ins, guest deletions and staff changes.</p>'+
+    '<p style="font-size:13px;color:var(--ink-soft);margin-top:-6px;">The latest 200 entries. Older entries are archived automatically (see the README). Download CSV saves the whole log.</p>'+
     '<div style="max-height:55vh;overflow-y:auto;">'+body+'</div>'+
-    '<div class="modal-actions"><button class="btn secondary" id="al-close">Close</button></div></div>';
+    '<div class="modal-actions"><button class="btn secondary" id="al-close">Close</button><button class="btn secondary" id="al-csv">Download CSV</button></div></div>';
   main.appendChild(overlay);
   document.getElementById('al-close').onclick = ()=> overlay.remove();
+  document.getElementById('al-csv').onclick = async ()=>{
+    try{
+      const s = getSession();
+      const res = await fetch('/api/audit/export', {headers:{'Authorization':'Bearer '+(s&&s.token)}});
+      if(!res.ok){ throw Object.assign(new Error('failed'), {status:res.status}); }
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a'); a.href = url; a.download = 'activity-log.csv'; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 5000);
+    }catch(e){ alert(errorMessage(e, 'Could not download the activity log.')); }
+  };
+}
+
+async function openBackups(){
+  const main = document.getElementById('main');
+  const overlay = document.createElement('div'); overlay.className='modal-overlay';
+  overlay.style.position='fixed'; overlay.style.inset='0'; overlay.style.zIndex='50'; overlay.style.borderRadius='0'; overlay.style.overflowY='auto';
+  overlay.innerHTML = '<div class="modal" style="max-width:640px;">'+
+    '<h2 style="margin-top:0;">Backups</h2>'+
+    '<p style="font-size:13px;color:var(--ink-soft);margin-top:-6px;">The server saves a backup every 24 hours. A backup holds all guest details and staff PIN hashes, so keep downloaded copies somewhere private.</p>'+
+    '<div id="bk-msg" style="font-size:13px;min-height:18px;margin-bottom:6px;"></div>'+
+    '<div id="bk-list" style="max-height:50vh;overflow-y:auto;"></div>'+
+    '<div class="modal-actions"><button class="btn secondary" id="bk-close">Close</button><button class="btn" id="bk-now">Back up now</button></div></div>';
+  main.appendChild(overlay);
+  const msg = overlay.querySelector('#bk-msg'), list = overlay.querySelector('#bk-list');
+  const say = (t, bad)=>{ msg.textContent = t; msg.style.color = bad ? '#a32d2d' : 'var(--ink-soft)'; };
+  const fmtSize = n => n > 1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1, Math.round(n/1024))+' KB';
+  async function load(){
+    let data;
+    try{ data = await api('/backups'); }
+    catch(e){ if(e.status !== 401){ say(errorMessage(e, 'Could not load the backups.'), true); } return; }
+    list.innerHTML = data.items.length ? data.items.map(b=>
+      '<div class="list-row" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;">'+
+        '<span><strong>'+escapeHtml(new Date(b.at).toLocaleString())+'</strong> <span style="color:var(--ink-soft);">'+fmtSize(b.size)+'</span></span>'+
+        '<button class="btn secondary small" data-dl="'+escapeHtml(b.name)+'">Download</button></div>'
+    ).join('') : '<p style="color:var(--ink-soft);">No backups yet. Press "Back up now".</p>';
+    list.querySelectorAll('[data-dl]').forEach(btn=>{
+      btn.onclick = async ()=>{
+        const name = btn.getAttribute('data-dl');
+        try{
+          const s = getSession();
+          const res = await fetch('/api/backups/'+encodeURIComponent(name)+'/download', {headers:{'Authorization':'Bearer '+(s&&s.token)}});
+          if(!res.ok){ throw Object.assign(new Error('download failed'), {status:res.status}); }
+          const url = URL.createObjectURL(await res.blob());
+          const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(()=>URL.revokeObjectURL(url), 5000);
+          say('Downloaded '+name+'. Store it somewhere private.');
+        }catch(e){ say(errorMessage(e, 'Could not download that backup.'), true); }
+      };
+    });
+    say('Newest '+data.keep+' backups are kept.');
+  }
+  overlay.querySelector('#bk-close').onclick = ()=> overlay.remove();
+  overlay.querySelector('#bk-now').onclick = async (ev)=>{
+    ev.target.disabled = true; say('Saving a backup…');
+    try{ await api('/backups', {method:'POST', body:'{}'}); await load(); say('Backup saved.'); }
+    catch(e){ say(errorMessage(e, 'The backup failed.'), true); }
+    ev.target.disabled = false;
+  };
+  load();
 }
 
 async function openManageStaff(){
@@ -590,7 +758,7 @@ function refreshStatus(){
 
 function setView(v){
   if(v === 'retention' && !isManager()){ v = 'search'; }
-  VIEW = v; ACTIVE_ID = null; window._shown = 50;
+  VIEW = v; ACTIVE_ID = null; window._page = 0;
   document.getElementById('nav-search').classList.toggle('active', v==='search');
   document.getElementById('nav-occasions').classList.toggle('active', v==='occasions');
   document.getElementById('nav-retention').classList.toggle('active', v==='retention');
@@ -643,8 +811,8 @@ function render(){
     const wrap = document.createElement('div'); wrap.className='cards';
     stale.forEach(g=>{
       const card = document.createElement('div'); card.className='gcard';
-      const left = document.createElement('div');
-      left.innerHTML = '<p class="gcard-name">'+escapeHtml(g.name)+'</p><p class="gcard-meta">Last activity: '+lastActivityLabel(g)+'</p>';
+      const left = document.createElement('div'); left.className='gcard-main';
+      left.innerHTML = '<div class="gcard-line"><p class="gcard-name">'+escapeHtml(g.name)+'</p><span class="gcard-meta">Last activity: '+lastActivityLabel(g)+'</span></div>';
       card.appendChild(left);
       const right = document.createElement('div'); right.style.display='flex'; right.style.gap='8px';
       const viewBtn = document.createElement('button'); viewBtn.className='btn secondary small'; viewBtn.textContent='View';
@@ -671,14 +839,17 @@ function render(){
   const input = document.createElement('input');
   input.type='text'; input.placeholder='Search by name, phone, notes or tag (e.g. "vegan")';
   input.value = window._lastQuery || '';
-  input.oninput = ()=>{ window._lastQuery = input.value; window._shown = 50; renderList(); };
-  searchRow.appendChild(input);
+  const box = document.createElement('div'); box.className='search-box';
+  input.oninput = ()=>{ window._lastQuery = input.value; window._page = 0; renderList(); };
+  box.appendChild(input);
+  attachSuggestions(input, box);
+  searchRow.appendChild(box);
 
   const typeSelect = document.createElement('select');
   typeSelect.style.maxWidth='160px';
   typeSelect.innerHTML = '<option value="">Any occasion</option><option value="Birthday">Birthday</option><option value="Anniversary">Anniversary</option><option value="Other">Other</option>';
   typeSelect.value = window._filterType || '';
-  typeSelect.onchange = ()=>{ window._filterType = typeSelect.value; window._shown = 50; renderList(); };
+  typeSelect.onchange = ()=>{ window._filterType = typeSelect.value; window._page = 0; renderList(); };
   searchRow.appendChild(typeSelect);
 
   const monthSelect = document.createElement('select');
@@ -686,14 +857,14 @@ function render(){
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   monthSelect.innerHTML = '<option value="">Any month</option>' + months.map((m,i)=>'<option value="'+i+'">'+m+'</option>').join('');
   monthSelect.value = (window._filterMonth===undefined || window._filterMonth===null) ? '' : window._filterMonth;
-  monthSelect.onchange = ()=>{ window._filterMonth = monthSelect.value; window._shown = 50; renderList(); };
+  monthSelect.onchange = ()=>{ window._filterMonth = monthSelect.value; window._page = 0; renderList(); };
   searchRow.appendChild(monthSelect);
 
   const tagSelect = document.createElement('select');
   tagSelect.style.maxWidth='170px';
   tagSelect.innerHTML = '<option value="">Any tag</option>' + TAG_GROUPS.map(gr=>'<optgroup label="'+escapeHtml(gr.group)+'">'+gr.tags.map(tg=>'<option value="'+escapeHtml(tg.id)+'">'+escapeHtml(tg.label)+'</option>').join('')+'</optgroup>').join('');
   tagSelect.value = window._filterTag || '';
-  tagSelect.onchange = ()=>{ window._filterTag = tagSelect.value; window._shown = 50; renderList(); };
+  tagSelect.onchange = ()=>{ window._filterTag = tagSelect.value; window._page = 0; renderList(); };
   searchRow.appendChild(tagSelect);
 
   content.appendChild(searchRow);
@@ -710,7 +881,7 @@ function render(){
     const clearBtn = document.createElement('button');
     clearBtn.className='btn gold small';
     clearBtn.textContent='Clear filter';
-    clearBtn.onclick = ()=>{ window._filterType=''; window._filterMonth=''; window._filterTag=''; window._shown = 50; render(); };
+    clearBtn.onclick = ()=>{ window._filterType=''; window._filterMonth=''; window._filterTag=''; window._page = 0; render(); };
     banner.appendChild(clearBtn);
     content.appendChild(banner);
   }
@@ -718,6 +889,96 @@ function render(){
   const listWrap = document.createElement('div'); listWrap.id='list-wrap';
   content.appendChild(listWrap);
   renderList();
+}
+
+// ---- Search suggestions (type-ahead) ----
+// Suggests guest names, phone numbers, tags and words used in notes as the user types.
+// Choosing one fills the search box; nothing is saved or sent anywhere.
+function buildSuggestions(raw){
+  const q = raw.trim().toLowerCase();
+  if(!q) return [];
+  const out = [];
+  const digits = q.replace(/\D/g,'');
+  const phoneLike = /^[\d\s+()-]+$/.test(q) && digits.length >= 3;
+  if(phoneLike){
+    GUESTS.filter(g=>(g.phone||'').replace(/\D/g,'').includes(digits)).slice(0,6)
+      .forEach(g=> out.push({kind:'Guest', text:g.phone, main:g.phone, sub:g.name, match:digits}));
+    return out;
+  }
+  const rank = g=>{
+    const n = g.name.toLowerCase();
+    if(n.startsWith(q)) return 0;
+    if(n.split(/\s+/).some(w=>w.startsWith(q))) return 1;
+    return n.includes(q) ? 2 : 3;
+  };
+  GUESTS.map(g=>({g, r:rank(g)})).filter(x=>x.r<3)
+    .sort((a,b)=>a.r-b.r || a.g.name.localeCompare(b.g.name)).slice(0,5)
+    .forEach(x=> out.push({kind:'Guest', text:x.g.name, main:x.g.name, sub:x.g.phone||'', match:q}));
+  const seen = new Set();
+  Object.keys(TAG_LABEL).map(id=>TAG_LABEL[id]).filter(l=>l.toLowerCase().includes(q))
+    .sort((a,b)=>(b.toLowerCase().startsWith(q)) - (a.toLowerCase().startsWith(q)) || a.localeCompare(b)).slice(0,3)
+    .forEach(l=>{ seen.add(l.toLowerCase()); out.push({kind:'Tag', text:l, main:l, sub:'', match:q}); });
+  if(q.length >= 2){
+    const counts = {};
+    GUESTS.forEach(g=> (String(g.notes||'').toLowerCase().match(/[a-z][a-z'-]{2,}/g) || []).forEach(w=>{ if(w.startsWith(q)) counts[w] = (counts[w]||0)+1; }));
+    Object.keys(counts).filter(w=>!seen.has(w)).sort((a,b)=>counts[b]-counts[a] || a.localeCompare(b)).slice(0,3)
+      .forEach(w=> out.push({kind:'Notes', text:w, main:w, sub:counts[w]+' guest'+(counts[w]===1?'':'s'), match:q}));
+  }
+  return out.slice(0,9);
+}
+
+function highlightMatch(text, match){
+  const i = String(text).toLowerCase().indexOf(match);
+  if(i < 0 || !match) return escapeHtml(text);
+  return escapeHtml(text.slice(0,i)) + '<mark>' + escapeHtml(text.slice(i, i+match.length)) + '</mark>' + escapeHtml(text.slice(i+match.length));
+}
+
+function attachSuggestions(input, box){
+  const list = document.createElement('div');
+  list.className = 'suggest'; list.hidden = true; list.setAttribute('role','listbox');
+  box.appendChild(list);
+  input.setAttribute('autocomplete','off');
+  input.setAttribute('aria-autocomplete','list');
+  let items = [], active = -1;
+
+  function close(){ list.hidden = true; active = -1; input.setAttribute('aria-expanded','false'); }
+  function paint(){
+    [...list.children].forEach((el,i)=>{ el.classList.toggle('active', i===active); el.setAttribute('aria-selected', i===active ? 'true' : 'false'); });
+    if(active >= 0 && list.children[active]) list.children[active].scrollIntoView({block:'nearest'});
+  }
+  function choose(i){
+    const it = items[i]; if(!it) return;
+    input.value = it.text;
+    window._lastQuery = it.text; window._page = 0;
+    close(); renderList();
+  }
+  function refresh(){
+    items = buildSuggestions(input.value);
+    // Do not suggest when the only suggestion is exactly what is already typed.
+    if(items.length === 1 && items[0].text.toLowerCase() === input.value.trim().toLowerCase()) items = [];
+    if(!items.length){ close(); return; }
+    list.innerHTML = '';
+    items.forEach((it,i)=>{
+      const el = document.createElement('div');
+      el.className = 'sg-item'; el.setAttribute('role','option');
+      el.innerHTML = '<span class="sg-main">'+highlightMatch(it.main, it.match)+(it.sub?'<span class="sg-sub">'+escapeHtml(it.sub)+'</span>':'')+'</span><span class="sg-kind">'+it.kind+'</span>';
+      // pointerdown + preventDefault keeps focus in the box, so the list is not closed before the tap registers.
+      el.addEventListener('pointerdown', ev=>{ ev.preventDefault(); choose(i); });
+      list.appendChild(el);
+    });
+    active = -1; list.hidden = false; input.setAttribute('aria-expanded','true');
+  }
+
+  input.addEventListener('input', refresh);
+  input.addEventListener('focus', ()=>{ if(input.value.trim()) refresh(); });
+  input.addEventListener('blur', close);
+  input.addEventListener('keydown', ev=>{
+    if(list.hidden){ if(ev.key === 'ArrowDown' && input.value.trim()){ refresh(); ev.preventDefault(); } return; }
+    if(ev.key === 'ArrowDown'){ active = (active + 1) % items.length; paint(); ev.preventDefault(); }
+    else if(ev.key === 'ArrowUp'){ active = (active - 1 + items.length) % items.length; paint(); ev.preventDefault(); }
+    else if(ev.key === 'Enter'){ if(active >= 0){ choose(active); ev.preventDefault(); } else { close(); } }
+    else if(ev.key === 'Escape'){ close(); }
+  });
 }
 
 function guestMatchesOccasionFilter(g){
@@ -747,33 +1008,50 @@ function renderList(){
     return;
   }
   listWrap.innerHTML='';
-  const wrap = document.createElement('div'); wrap.className='cards';
-  const PAGE = 50;
+  const PAGE = 10;
   const total = list.length;
-  const shown = Math.min(window._shown || PAGE, total);
-  const summary = document.createElement('p');
-  summary.style.cssText='font-size:13px;color:var(--ink-soft);margin:0 0 10px;';
-  summary.textContent = 'Showing ' + shown + ' of ' + total + ' guest' + (total===1?'':'s');
-  listWrap.appendChild(summary);
-  list.slice(0, shown).forEach(g=> wrap.appendChild(guestCard(g, daysUntilNextOccasion(g))));
+  const pages = Math.max(1, Math.ceil(total / PAGE));
+  if((window._page || 0) > pages - 1) window._page = pages - 1;
+  const page = window._page || 0;
+  const from = page * PAGE, to = Math.min(from + PAGE, total);
+  const goto = n => { window._page = n; renderList(); const m = document.getElementById('main'); if(m) m.scrollTop = 0; };
+  const pager = cls => {
+    const bar = document.createElement('div'); bar.className = 'pager' + (cls ? ' ' + cls : '');
+    const info = document.createElement('span');
+    info.textContent = 'Showing ' + (from+1) + '–' + to + ' of ' + total + ' guest' + (total===1?'':'s');
+    const btns = document.createElement('div'); btns.className = 'pg-btns';
+    const prev = document.createElement('button'); prev.className = 'btn secondary'; prev.textContent = '‹ Previous'; prev.disabled = page === 0; prev.onclick = ()=>goto(page - 1);
+    const mid = document.createElement('span'); mid.textContent = 'Page ' + (page+1) + ' of ' + pages;
+    const next = document.createElement('button'); next.className = 'btn secondary'; next.textContent = 'Next ›'; next.disabled = page >= pages - 1; next.onclick = ()=>goto(page + 1);
+    btns.appendChild(prev); btns.appendChild(mid); btns.appendChild(next);
+    if(cls === 'bottom'){ bar.appendChild(btns); } else { bar.appendChild(info); if(pages > 1) bar.appendChild(btns); }
+    return bar;
+  };
+  listWrap.appendChild(pager(''));
+  const wrap = document.createElement('div'); wrap.className='cards';
+  list.slice(from, to).forEach(g=> wrap.appendChild(guestCard(g, daysUntilNextOccasion(g))));
   listWrap.appendChild(wrap);
-  if(shown < total){
-    const more = document.createElement('button');
-    more.className='btn secondary';
-    more.style.cssText='margin-top:14px;width:100%;';
-    more.textContent = 'Show ' + Math.min(PAGE, total-shown) + ' more';
-    more.onclick = ()=>{ window._shown = shown + PAGE; renderList(); };
-    listWrap.appendChild(more);
-  }
+  if(pages > 1) listWrap.appendChild(pager('bottom'));
 }
 
 function guestCard(g, occasionInfo){
   const card = document.createElement('div'); card.className='gcard';
   card.onclick = ()=>openGuest(g.id);
-  const left = document.createElement('div');
-  left.innerHTML = '<p class="gcard-name">'+escapeHtml(g.name)+'</p><p class="gcard-meta">'+escapeHtml(g.phone||'No phone on file')+'</p>'+
-    (g.notes ? '<p class="gcard-meta" style="font-style:italic;margin-top:2px;">'+escapeHtml(g.notes)+'</p>' : '');
-  if(g.tags && g.tags.length) left.appendChild(tagRow(g.tags));
+  const left = document.createElement('div'); left.className='gcard-main';
+  left.innerHTML = '<div class="gcard-line"><p class="gcard-name">'+escapeHtml(g.name)+'</p><span class="gcard-meta">'+escapeHtml(g.phone||'No phone on file')+'</span></div>';
+  const tagIds = sortedTags(g.tags||[]);
+  if(g.notes || tagIds.length){
+    const sub = document.createElement('div'); sub.className='gcard-sub';
+    if(tagIds.length){
+      const allergyN = tagIds.filter(id=>TAG_KIND[id]==='allergy').length;
+      const cap = Math.max(3, allergyN);   // never hide an allergy
+      const tr = tagRow(tagIds.slice(0,cap));
+      if(tagIds.length > cap){ const more = document.createElement('span'); more.className='gcard-meta'; more.style.fontStyle='normal'; more.textContent='+'+(tagIds.length-cap); tr.appendChild(more); }
+      sub.appendChild(tr);
+    }
+    if(g.notes){ const n = document.createElement('span'); n.className='gcard-meta'; n.textContent = g.notes; n.title = g.notes; sub.appendChild(n); }
+    left.appendChild(sub);
+  }
   card.appendChild(left);
   const right = document.createElement('div');
   right.style.display='flex'; right.style.gap='8px'; right.style.alignItems='center';
@@ -845,16 +1123,7 @@ function renderProfile(g){
   const visitSec = document.createElement('div'); visitSec.className='section';
   visitSec.innerHTML = '<h2>Visit history</h2>';
   const visits = _.orderBy(g.visits||[], 'date', 'desc');
-  if(visits.length===0){
-    visitSec.innerHTML += '<p style="font-size:14px;color:var(--ink-soft);">No visits logged yet.</p>';
-  }else{
-    visits.forEach(v=>{
-      const row = document.createElement('div'); row.className='list-row';
-      row.innerHTML = '<div class="top"><span>'+new Date(v.date).toLocaleDateString()+'</span><span>'+(v.loggedBy?'Logged by '+escapeHtml(v.loggedBy):'')+'</span></div><div class="note">'+escapeHtml(v.note||'No notes for this visit.')+'</div>';
-      visitSec.appendChild(row);
-    });
-  }
-  const visitForm = document.createElement('div'); visitForm.className='inline-form';
+  const visitForm = document.createElement('div'); visitForm.className='inline-form'; visitForm.style.marginTop='0'; visitForm.style.marginBottom='8px';
   const vDate = document.createElement('input'); vDate.type='date'; vDate.value=new Date().toISOString().slice(0,10);
   const vNote = document.createElement('input'); vNote.type='text'; vNote.placeholder='Note for this visit (optional)';
   const vBtn = document.createElement('button'); vBtn.className='btn gold small'; vBtn.textContent='Log visit';
@@ -868,7 +1137,29 @@ function renderProfile(g){
     render();
   };
   visitForm.appendChild(vDate); visitForm.appendChild(vNote); visitForm.appendChild(vBtn);
-  visitSec.appendChild(visitForm);
+  visitSec.appendChild(visitForm);   // logging a visit is the common action, so it sits at the top
+  const hist = document.createElement('div');
+  visitSec.appendChild(hist);
+  if(visits.length===0){
+    hist.innerHTML = '<p style="font-size:14px;color:var(--ink-soft);">No visits logged yet.</p>';
+  }else{
+    const SHOW = 5;
+    const paint = all=>{
+      hist.innerHTML = '';
+      (all ? visits : visits.slice(0, SHOW)).forEach(v=>{
+        const row = document.createElement('div'); row.className='list-row';
+        row.innerHTML = '<div class="top"><span>'+new Date(v.date).toLocaleDateString()+'</span><span>'+(v.loggedBy?'Logged by '+escapeHtml(v.loggedBy):'')+'</span></div><div class="note">'+escapeHtml(v.note||'No notes for this visit.')+'</div>';
+        hist.appendChild(row);
+      });
+      if(visits.length > SHOW){
+        const t = document.createElement('button'); t.className='more-visits';
+        t.textContent = all ? 'Show fewer' : 'Show all ' + visits.length + ' visits';
+        t.onclick = ()=>paint(!all);
+        hist.appendChild(t);
+      }
+    };
+    paint(false);
+  }
   wrap.appendChild(visitSec);
 
   // Occasions

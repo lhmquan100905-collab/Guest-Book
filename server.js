@@ -46,6 +46,11 @@ db.exec(`
     role TEXT NOT NULL DEFAULT 'staff'
   );
 
+  CREATE TABLE IF NOT EXISTS custom_tags (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    label TEXT NOT NULL);
+
   CREATE TABLE IF NOT EXISTS guest_tags (
     guest_id TEXT NOT NULL REFERENCES guests(id) ON DELETE CASCADE,
     tag      TEXT NOT NULL,
@@ -155,8 +160,18 @@ const TAG_GROUPS = [
     ['svc-quiet', 'Quiet table'], ['svc-window', 'Window seat'], ['svc-booth', 'Booth'],
     ['svc-outdoor', 'Outdoor seating'], ['svc-high-chair', 'High chair'], ['svc-wheelchair', 'Wheelchair access'] ] },
 ];
-const TAGS_FOR_API = TAG_GROUPS.map(g => ({ group: g.group, kind: g.kind, tags: g.tags.map(([id, label]) => ({ id, label })) }));
-const ALLOWED_TAGS = new Set(TAG_GROUPS.flatMap(g => g.tags.map(([id]) => id)));
+const ALLOWED_TAGS = new Set(TAG_GROUPS.flatMap(g => g.tags.map(([id]) => id))); // built-in tags
+// Tags a manager adds from inside the app are stored in the custom_tags table.
+const allCustomTags = () => db.prepare('SELECT id, kind, label FROM custom_tags ORDER BY label COLLATE NOCASE').all();
+const isKnownTag = id => ALLOWED_TAGS.has(id) || !!db.prepare('SELECT 1 FROM custom_tags WHERE id = ?').get(id);
+function tagsForApi() {
+  const custom = allCustomTags();
+  return TAG_GROUPS.map(g => ({
+    group: g.group, kind: g.kind,
+    tags: g.tags.map(([id, label]) => ({ id, label, custom: false }))
+      .concat(custom.filter(c => c.kind === g.kind).map(c => ({ id: c.id, label: c.label, custom: true }))),
+  }));
+}
 
 // Returns { value: null } when the request has no "tags" (leave them unchanged),
 // { value: [ids] } when valid, or { error } for anything not on the list.
@@ -165,7 +180,7 @@ function parseTags(body) {
   if (!Array.isArray(body.tags) || body.tags.length > 40) return { error: 'tags must be a list of known tags' };
   const out = [];
   for (const t of body.tags) {
-    if (typeof t !== 'string' || !ALLOWED_TAGS.has(t)) return { error: 'unknown tag' };
+    if (typeof t !== 'string' || !isKnownTag(t)) return { error: 'unknown tag' };
     if (!out.includes(t)) out.push(t);
   }
   return { value: out };
@@ -320,6 +335,121 @@ app.get('/api/me', (req, res) => {
 // Full staff list with roles (managers only).
 app.get('/api/staff/all', requireManager, (req, res) => {
   res.json(db.prepare('SELECT id, name, role FROM staff ORDER BY rowid').all());
+});
+
+// ---- Backups ----
+// A backup is a complete, consistent copy of the database made with SQLite's own
+// VACUUM INTO (safe while the server is running, unlike copying the file by hand).
+// It holds guest details and staff PIN hashes, so the folder must be protected and
+// kept out of GitHub. Managers can also download a copy from the app.
+const fs = require('fs');
+const BACKUP_DIR  = process.env.BACKUP_DIR || path.join(__dirname, 'backups');
+const BACKUP_KEEP = Math.max(1, parseInt(process.env.BACKUP_KEEP, 10) || 14);   // newest copies kept
+const BACKUP_EVERY_MS = 24 * 60 * 60 * 1000;                                    // automatic: once a day
+const BACKUP_NAME = /^guestbook-\d{4}-\d{2}-\d{2}-\d{6}\.db$/;
+
+function listBackups() {
+  try {
+    return fs.readdirSync(BACKUP_DIR).filter(n => BACKUP_NAME.test(n)).sort().reverse().map(name => {
+      const st = fs.statSync(path.join(BACKUP_DIR, name));
+      return { name, size: st.size, at: st.mtime.toISOString() };
+    });
+  } catch (e) { return []; }
+}
+
+function makeBackup() {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  let name = `guestbook-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.db`;
+  let file = path.join(BACKUP_DIR, name);
+  if (fs.existsSync(file)) { // two backups in the same second: wait it out by adding a suffix-free retry
+    const t = Date.now() + 1100; while (Date.now() < t) { /* brief wait */ }
+    return makeBackup();
+  }
+  db.exec("VACUUM INTO '" + file.replace(/'/g, "''") + "'");
+  try { fs.chmodSync(file, 0o600); } catch (e) {}
+  // Check the copy opens and has the expected tables before trusting it.
+  const copy = new DatabaseSync(file);
+  try { copy.prepare('SELECT COUNT(*) AS c FROM guests').get(); copy.prepare('SELECT COUNT(*) AS c FROM staff').get(); }
+  finally { copy.close(); }
+  // Keep only the newest BACKUP_KEEP copies.
+  for (const old of listBackups().slice(BACKUP_KEEP)) {
+    try { fs.unlinkSync(path.join(BACKUP_DIR, old.name)); } catch (e) {}
+  }
+  return { name, size: fs.statSync(file).size, at: new Date().toISOString() };
+}
+
+function autoBackup() {
+  try {
+    if (staffCount() === 0) return;            // nothing worth saving yet
+    const latest = listBackups()[0];
+    if (!latest || Date.now() - new Date(latest.at).getTime() >= BACKUP_EVERY_MS) {
+      const b = makeBackup();
+      record('system', null, 'Automatic backup saved (' + b.name + ')');
+    }
+  } catch (e) { console.log('[backup] automatic backup failed:', e.message); }
+}
+
+app.get('/api/backups', requireManager, (req, res) => {
+  res.json({ keep: BACKUP_KEEP, items: listBackups() });
+});
+
+app.post('/api/backups', requireManager, (req, res) => {
+  try {
+    const b = makeBackup();
+    audit(req, 'Created a backup (' + b.name + ')');
+    res.status(201).json(b);
+  } catch (e) {
+    console.log('[backup] failed:', e.message);
+    res.status(500).json({ error: 'backup failed' });
+  }
+});
+
+app.get('/api/backups/:name/download', requireManager, (req, res) => {
+  const name = req.params.name;
+  if (!BACKUP_NAME.test(name)) return res.status(400).json({ error: 'invalid backup name' });
+  const file = path.join(BACKUP_DIR, name);
+  if (!fs.existsSync(file)) return res.status(404).json({ error: 'backup not found' });
+  audit(req, 'Downloaded a backup (' + name + ')');
+  res.setHeader('Content-Type', 'application/octet-stream');
+  res.setHeader('Content-Disposition', 'attachment; filename="' + name + '"');
+  res.setHeader('Content-Length', fs.statSync(file).size);
+  fs.createReadStream(file).pipe(res);
+});
+
+// ---- Activity log housekeeping ----
+// Entries older than AUDIT_KEEP_DAYS (default 365, minimum 30) are removed once a day.
+// Before they are removed they are appended to audit-archive.csv in the backups folder,
+// so a record is kept off the live database. The trim itself is written to the log.
+const AUDIT_KEEP_DAYS = Math.max(30, parseInt(process.env.AUDIT_KEEP_DAYS, 10) || 365);
+const csvCell = v => { const t = String(v == null ? '' : v); return /[",\r\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+const csvRow = r => [r.id, r.at, r.actor, r.role, r.action].map(csvCell).join(',') + '\r\n';
+const CSV_HEADER = 'id,at,actor,role,action\r\n';
+
+function trimAuditLog() {
+  try {
+    const cutoff = new Date(Date.now() - AUDIT_KEEP_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const old = db.prepare('SELECT id, at, actor, role, action FROM audit_log WHERE at < ? ORDER BY id').all(cutoff);
+    if (!old.length) return 0;
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const archive = path.join(BACKUP_DIR, 'audit-archive.csv');
+    const isNew = !fs.existsSync(archive);
+    fs.appendFileSync(archive, (isNew ? CSV_HEADER : '') + old.map(csvRow).join(''), { mode: 0o600 });
+    // Only delete once the copy is safely written.
+    db.prepare('DELETE FROM audit_log WHERE at < ?').run(cutoff);
+    record('system', null, `Activity log trimmed: ${old.length} entries older than ${AUDIT_KEEP_DAYS} days moved to audit-archive.csv`);
+    return old.length;
+  } catch (e) { console.log('[audit] trim failed:', e.message); return 0; }
+}
+
+// Whole log as a CSV file (managers only).
+app.get('/api/audit/export', requireManager, (req, res) => {
+  const rows = db.prepare('SELECT id, at, actor, role, action FROM audit_log ORDER BY id').all();
+  audit(req, 'Downloaded the activity log as CSV');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="activity-log.csv"');
+  res.send(CSV_HEADER + rows.map(csvRow).join(''));
 });
 
 app.get('/api/audit', requireManager, (req, res) => {
@@ -491,7 +621,63 @@ app.post('/api/tags/from-notes', requireManager, (req, res) => {
 });
 
 app.get('/api/tags', (req, res) => {
-  res.json(TAGS_FOR_API);
+  res.json(tagsForApi());
+});
+
+// ---- Managers add, rename and remove their own tags (built-in tags are fixed) ----
+const MAX_CUSTOM_TAGS = 60;
+function cleanTagLabel(v) {
+  const label = (typeof v === 'string' ? v : '').replace(/\s+/g, ' ').trim();
+  if (label.length < 2 || label.length > 30) return { error: 'tag name must be 2 to 30 characters' };
+  if (/[<>\u0000-\u001f]/.test(label)) return { error: 'tag name has characters that are not allowed' };
+  return { label };
+}
+const labelTaken = (label, exceptId) =>
+  tagsForApi().some(g => g.tags.some(t => t.id !== exceptId && t.label.toLowerCase() === label.toLowerCase()));
+
+app.get('/api/tags/usage', requireManager, (req, res) => {
+  const rows = db.prepare('SELECT tag, COUNT(*) AS n FROM guest_tags GROUP BY tag').all();
+  const out = {}; for (const r of rows) out[r.tag] = r.n;
+  res.json(out);
+});
+
+app.post('/api/tags', requireManager, (req, res) => {
+  const b = req.body || {};
+  const g = TAG_GROUPS.find(x => x.kind === b.kind);
+  if (!g) return res.status(400).json({ error: 'choose a group for the tag' });
+  const c = cleanTagLabel(b.label);
+  if (c.error) return res.status(400).json({ error: c.error });
+  if (labelTaken(c.label, null)) return res.status(409).json({ error: 'a tag with that name already exists' });
+  if (allCustomTags().length >= MAX_CUSTOM_TAGS) return res.status(400).json({ error: 'too many custom tags' });
+  const id = 'custom-' + g.kind + '-' + crypto.randomBytes(4).toString('hex');
+  db.prepare('INSERT INTO custom_tags (id, kind, label) VALUES (?, ?, ?)').run(id, g.kind, c.label);
+  audit(req, `added the tag "${c.label}" to ${g.group}`);
+  res.status(201).json({ id, kind: g.kind, label: c.label });
+});
+
+app.put('/api/tags/:id', requireManager, (req, res) => {
+  const row = db.prepare('SELECT id, label FROM custom_tags WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: ALLOWED_TAGS.has(req.params.id) ? 'built-in tags cannot be renamed' : 'tag not found' });
+  const c = cleanTagLabel((req.body || {}).label);
+  if (c.error) return res.status(400).json({ error: c.error });
+  if (labelTaken(c.label, row.id)) return res.status(409).json({ error: 'a tag with that name already exists' });
+  db.prepare('UPDATE custom_tags SET label = ? WHERE id = ?').run(c.label, row.id);
+  audit(req, `renamed the tag "${row.label}" to "${c.label}"`);
+  res.json({ id: row.id, label: c.label });
+});
+
+app.delete('/api/tags/:id', requireManager, (req, res) => {
+  const row = db.prepare('SELECT id, label FROM custom_tags WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: ALLOWED_TAGS.has(req.params.id) ? 'built-in tags cannot be removed' : 'tag not found' });
+  let n = 0;
+  db.exec('BEGIN');
+  try {
+    n = db.prepare('DELETE FROM guest_tags WHERE tag = ?').run(row.id).changes;
+    db.prepare('DELETE FROM custom_tags WHERE id = ?').run(row.id);
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); return res.status(500).json({ error: 'could not remove the tag' }); }
+  audit(req, `removed the tag "${row.label}" (was on ${n} guest${n === 1 ? '' : 's'})`);
+  res.json({ removed: true, guests: Number(n) });
 });
 
 app.get('/api/guests', (req, res) => {
@@ -587,7 +773,6 @@ app.use((err, req, res, next) => {
 // as plain HTTP (fine for first tests, not for real use).
 // If you provide only one of the two, or a file cannot be read, the server stops
 // with a clear message instead of quietly falling back to HTTP.
-const fs = require('fs');
 function loadTls() {
   const certPath = process.env.TLS_CERT || path.join(__dirname, 'certs', 'cert.pem');
   const keyPath  = process.env.TLS_KEY  || path.join(__dirname, 'certs', 'key.pem');
@@ -627,8 +812,18 @@ const onListening = () => {
   if (!found) console.log('  No network connection found - connect this computer to Wi-Fi first.');
   console.log('Use the one for your Wi-Fi adapter, not virtual ones (WSL, VirtualBox, Hyper-V, VPN).');
   if (!tlsOptions) console.log('WARNING: PINs and guest data are NOT encrypted on the network. See README, "HTTPS".');
+  console.log(`Activity log: entries older than ${AUDIT_KEEP_DAYS} days are archived and removed daily.`);
+  console.log(`Backups: ${BACKUP_DIR} (automatic every 24 hours, newest ${BACKUP_KEEP} kept)`);
   if (staffCount() === 0) console.log('No staff accounts yet: open the app and create the first account now.');
 };
 
 if (tlsOptions) require('https').createServer(tlsOptions, app).listen(PORT, '0.0.0.0', onListening);
 else app.listen(PORT, '0.0.0.0', onListening);
+
+// Take a backup now if none exists in the last 24 hours, then check once an hour.
+autoBackup();
+setInterval(autoBackup, 60 * 60 * 1000).unref();
+
+// Trim the activity log at start-up, then once a day.
+trimAuditLog();
+setInterval(trimAuditLog, 24 * 60 * 60 * 1000).unref();
